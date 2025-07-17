@@ -15,6 +15,8 @@ using WhisperTranscriberCLI.Core.Models;
 using WhisperTranscriberCLI.Core.Services;
 using WhisperTranscriberCLI.TaskUI.Services;
 using WhisperTranscriberCLI.TaskUI.ViewModels;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Navigation;
 
 namespace WhisperTranscriberCLI.TaskUI.Views;
 
@@ -25,6 +27,7 @@ public sealed partial class MainPage : Page
     private readonly AudioDurationService _audioDurationService;
     private readonly SettingsService _settingsService;
     private readonly SystemCheckService _systemCheckService;
+    private readonly SystemTrayService _systemTrayService;
     private QueueManager? _queueManager;
     
     public MainPage()
@@ -34,6 +37,9 @@ public sealed partial class MainPage : Page
         _audioDurationService = new AudioDurationService();
         _settingsService = new SettingsService();
         _systemCheckService = new SystemCheckService();
+        _systemTrayService = new SystemTrayService(App.MainWindow, _settingsService);
+        
+        InitializeSystemTray();
         
         TaskListView.ItemsSource = _tasks;
         LoadModels();
@@ -406,7 +412,7 @@ public sealed partial class MainPage : Page
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        UpdateStatus("Settings not yet implemented");
+        ShowSettingsPage();
     }
 
     private async void AboutButton_Click(object sender, RoutedEventArgs e)
@@ -514,6 +520,19 @@ public sealed partial class MainPage : Page
         DispatcherQueue.TryEnqueue(() =>
         {
             UpdateStatus($"Task completed: {Path.GetFileName(e.FilePath)}");
+            UpdateQueueProgress();
+            
+            // Show system tray notification
+            _systemTrayService.ShowNotification(
+                "Transcription Complete", 
+                $"Finished transcribing {Path.GetFileName(e.FilePath)}",
+                NotificationSeverity.Success);
+                
+            // Open output if enabled
+            if (_settingsService.Settings.OpenOutputAfterCompletion && !string.IsNullOrEmpty(e.OutputPath))
+            {
+                _ = OpenOutputFileAsync(e.OutputPath);
+            }
         });
     }
 
@@ -522,7 +541,64 @@ public sealed partial class MainPage : Page
         DispatcherQueue.TryEnqueue(() =>
         {
             UpdateStatus($"Task failed: {Path.GetFileName(e.FilePath)} - {e.ErrorMessage}");
+            UpdateQueueProgress();
+            
+            // Show system tray notification
+            _systemTrayService.ShowNotification(
+                "Transcription Failed", 
+                $"Failed to transcribe {Path.GetFileName(e.FilePath)}: {e.ErrorMessage}",
+                NotificationSeverity.Error);
         });
+    }
+
+    private void UpdateQueueProgress()
+    {
+        if (_queueManager == null) return;
+        
+        var totalTasks = _queueManager.Queue.Tasks.Count;
+        var completedTasks = _queueManager.Queue.Tasks.Count(t => t.Status == Core.Models.TaskStatus.Done);
+        var failedTasks = _queueManager.Queue.Tasks.Count(t => t.Status == Core.Models.TaskStatus.Error);
+        var processingTasks = _queueManager.Queue.Tasks.Count(t => t.Status == Core.Models.TaskStatus.Processing);
+        var pendingTasks = _queueManager.Queue.Tasks.Count(t => t.Status == Core.Models.TaskStatus.Pending);
+        
+        if (totalTasks > 0)
+        {
+            var currentTask = _queueManager.Queue.Tasks.FirstOrDefault(t => t.Status == Core.Models.TaskStatus.Processing);
+            if (currentTask != null)
+            {
+                var fileName = Path.GetFileName(currentTask.FilePath);
+                var progress = $"Processing: {fileName} ({completedTasks + 1}/{totalTasks})";
+                
+                if (pendingTasks > 0)
+                {
+                    progress += $" • {pendingTasks} pending";
+                }
+                
+                if (failedTasks > 0)
+                {
+                    progress += $" • {failedTasks} failed";
+                }
+                
+                UpdateStatus(progress);
+            }
+            else if (pendingTasks > 0)
+            {
+                UpdateStatus($"Queue ready • {pendingTasks} pending, {completedTasks} completed");
+            }
+            else
+            {
+                UpdateStatus($"Queue complete • {completedTasks} completed, {failedTasks} failed");
+                
+                // Show queue completion notification
+                if (completedTasks > 0 || failedTasks > 0)
+                {
+                    _systemTrayService.ShowNotification(
+                        "Queue Complete", 
+                        $"All tasks finished: {completedTasks} completed, {failedTasks} failed",
+                        NotificationSeverity.Success);
+                }
+            }
+        }
     }
 
     private void UpdateStatus(string message)
@@ -811,6 +887,72 @@ public sealed partial class MainPage : Page
         catch (Exception ex)
         {
             UpdateStatus($"Error processing folder {folder.Name}: {ex.Message}");
+        }
+    }
+
+    private void InitializeSystemTray()
+    {
+        // Simplified system tray initialization
+        _systemTrayService.ShowWindowRequested += OnSystemTrayShowWindow;
+        _systemTrayService.HideWindowRequested += OnSystemTrayHideWindow;
+    }
+
+    private void OnSystemTrayShowWindow(object? sender, EventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            App.MainWindow.Activate();
+        });
+    }
+
+    private void OnSystemTrayHideWindow(object? sender, EventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            App.MainWindow.Hide();
+        });
+    }
+
+    private void ShowSettingsPage()
+    {
+        UpdateStatus("Settings page not yet implemented");
+    }
+
+
+    public void HandleMinimizeToTray()
+    {
+        if (_settingsService.Settings.MinimizeToTray && _settingsService.Settings.SystemTrayEnabled)
+        {
+            App.MainWindow.Hide();
+        }
+    }
+
+    public bool ShouldCloseToTray()
+    {
+        return _settingsService.Settings.CloseToTray && _settingsService.Settings.SystemTrayEnabled;
+    }
+
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        
+        // Show system tray notification on startup if enabled
+        if (_settingsService.Settings.SystemTrayEnabled)
+        {
+            _systemTrayService.ShowNotification("Whisper Transcription Queue", "Application started successfully");
+        }
+    }
+
+    private async Task OpenOutputFileAsync(string outputPath)
+    {
+        try
+        {
+            var storageFile = await StorageFile.GetFileFromPathAsync(outputPath);
+            await Windows.System.Launcher.LaunchFileAsync(storageFile);
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus($"Failed to open output file: {ex.Message}");
         }
     }
 }

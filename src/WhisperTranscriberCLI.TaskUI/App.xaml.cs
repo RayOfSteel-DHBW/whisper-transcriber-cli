@@ -9,6 +9,7 @@ namespace WhisperTranscriberCLI.TaskUI
     public partial class App : Application
     {
         private Window? window;
+        private MainPage? mainPage;
         
         public static Window MainWindow { get; private set; } = null!;
 
@@ -40,7 +41,29 @@ namespace WhisperTranscriberCLI.TaskUI
 
             _ = rootFrame.Navigate(typeof(MainPage), e.Arguments);
             window.Title = "Whisper Transcription Queue";
+            
+            // Set up window closing behavior
+            window.Closed += OnWindowClosed;
+            
             window.Activate();
+        }
+        
+        private void OnWindowClosed(object sender, WindowEventArgs args)
+        {
+            // Get the main page to check close-to-tray setting
+            if (window?.Content is Frame frame && frame.Content is MainPage mainPageInstance)
+            {
+                if (mainPageInstance.ShouldCloseToTray())
+                {
+                    // Cancel the close and hide instead
+                    args.Handled = true;
+                    window.Hide();
+                    return;
+                }
+            }
+            
+            // Normal close behavior
+            this.Exit();
         }
 
         /// <summary>

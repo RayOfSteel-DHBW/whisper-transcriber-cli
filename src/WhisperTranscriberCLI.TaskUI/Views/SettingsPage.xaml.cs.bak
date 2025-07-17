@@ -1,0 +1,286 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using System;
+using System.IO;
+using System.Linq;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
+using WhisperTranscriberCLI.Core.Services;
+using WhisperTranscriberCLI.TaskUI.Services;
+
+namespace WhisperTranscriberCLI.TaskUI.Views;
+
+public sealed partial class SettingsPage : Page
+{
+    private readonly SettingsService _settingsService;
+    private readonly ModelDiscovery _modelDiscovery;
+    private readonly SystemTrayService? _systemTrayService;
+    private AppSettings _originalSettings;
+
+    public event EventHandler? SettingsSaved;
+    public event EventHandler? SettingsCancelled;
+
+    public SettingsPage(SettingsService settingsService, SystemTrayService? systemTrayService = null)
+    {
+        this.InitializeComponent();
+        _settingsService = settingsService;
+        _systemTrayService = systemTrayService;
+        _modelDiscovery = new ModelDiscovery();
+        _originalSettings = CopySettings(_settingsService.Settings);
+        
+        LoadSettings();
+    }
+
+    private void LoadSettings()
+    {
+        var settings = _settingsService.Settings;
+        
+        // Load general settings
+        OutputDirectoryTextBox.Text = settings.OutputDirectory;
+        RecursiveToggleSwitch.IsOn = settings.Recursive;
+        
+        // Load models
+        var models = _modelDiscovery.GetAvailableModels();
+        DefaultModelComboBox.ItemsSource = models;
+        DefaultModelComboBox.DisplayMemberPath = "Name";
+        DefaultModelComboBox.SelectedValuePath = "Name";
+        
+        if (models.Count > 0)
+        {
+            var defaultModel = models.FirstOrDefault(m => m.Name == settings.DefaultModel);
+            if (defaultModel != null)
+            {
+                DefaultModelComboBox.SelectedItem = defaultModel;
+            }
+            else
+            {
+                DefaultModelComboBox.SelectedIndex = 0;
+            }
+        }
+        
+        // Load default language
+        var languageItems = DefaultLanguageComboBox.Items.Cast<ComboBoxItem>();
+        var defaultLanguageItem = languageItems.FirstOrDefault(item => 
+            item.Content.ToString() == settings.DefaultLanguage);
+        if (defaultLanguageItem != null)
+        {
+            DefaultLanguageComboBox.SelectedItem = defaultLanguageItem;
+        }
+        
+        // Load system tray settings
+        SystemTrayToggleSwitch.IsOn = settings.SystemTrayEnabled;
+        MinimizeToTrayToggleSwitch.IsOn = settings.MinimizeToTray;
+        CloseToTrayToggleSwitch.IsOn = settings.CloseToTray;
+        
+        // Load post-processing settings
+        OpenOutputToggleSwitch.IsOn = settings.OpenOutputAfterCompletion;
+        
+        // Load advanced settings
+        QueueFileLocationTextBox.Text = settings.LastQueuePath;
+        
+        // Update UI state
+        UpdateTraySettingsState();
+    }
+
+    private void UpdateTraySettingsState()
+    {
+        var trayEnabled = SystemTrayToggleSwitch.IsOn;
+        MinimizeToTrayToggleSwitch.IsEnabled = trayEnabled;
+        CloseToTrayToggleSwitch.IsEnabled = trayEnabled;
+    }
+
+    private async void BrowseOutputDirectoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FolderPicker();
+        picker.ViewMode = PickerViewMode.List;
+
+        var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
+        InitializeWithWindow.Initialize(picker, hwnd);
+
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder != null)
+        {
+            OutputDirectoryTextBox.Text = folder.Path;
+        }
+    }
+
+    private async void BrowseQueueLocationButton_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker();
+        picker.ViewMode = PickerViewMode.List;
+        picker.FileTypeFilter.Add(".json");
+
+        var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
+        InitializeWithWindow.Initialize(picker, hwnd);
+
+        var file = await picker.PickSingleFileAsync();
+        if (file != null)
+        {
+            QueueFileLocationTextBox.Text = file.Path;
+        }
+    }
+
+    private void DefaultModelComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Settings will be applied when Save is clicked
+    }
+
+    private void DefaultLanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Settings will be applied when Save is clicked
+    }
+
+    private void RecursiveToggleSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        // Settings will be applied when Save is clicked
+    }
+
+    private void SystemTrayToggleSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        UpdateTraySettingsState();
+    }
+
+    private void MinimizeToTrayToggleSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        // Settings will be applied when Save is clicked
+    }
+
+    private void CloseToTrayToggleSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        // Settings will be applied when Save is clicked
+    }
+
+    private void OpenOutputToggleSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        // Settings will be applied when Save is clicked
+    }
+
+    private async void ResetSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Reset Settings",
+            Content = "Are you sure you want to reset all settings to their default values? This action cannot be undone.",
+            PrimaryButtonText = "Reset",
+            CloseButtonText = "Cancel",
+            XamlRoot = this.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            // Reset to defaults
+            var defaultSettings = new AppSettings();
+            _settingsService.Settings.OutputDirectory = defaultSettings.OutputDirectory;
+            _settingsService.Settings.DefaultModel = defaultSettings.DefaultModel;
+            _settingsService.Settings.DefaultLanguage = defaultSettings.DefaultLanguage;
+            _settingsService.Settings.Recursive = defaultSettings.Recursive;
+            _settingsService.Settings.SystemTrayEnabled = defaultSettings.SystemTrayEnabled;
+            _settingsService.Settings.MinimizeToTray = defaultSettings.MinimizeToTray;
+            _settingsService.Settings.CloseToTray = defaultSettings.CloseToTray;
+            _settingsService.Settings.OpenOutputAfterCompletion = defaultSettings.OpenOutputAfterCompletion;
+            
+            // Reload UI
+            LoadSettings();
+        }
+    }
+
+    private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // Apply all settings
+            var settings = _settingsService.Settings;
+            
+            settings.OutputDirectory = OutputDirectoryTextBox.Text;
+            settings.Recursive = RecursiveToggleSwitch.IsOn;
+            settings.SystemTrayEnabled = SystemTrayToggleSwitch.IsOn;
+            settings.MinimizeToTray = MinimizeToTrayToggleSwitch.IsOn;
+            settings.CloseToTray = CloseToTrayToggleSwitch.IsOn;
+            settings.OpenOutputAfterCompletion = OpenOutputToggleSwitch.IsOn;
+            
+            if (DefaultModelComboBox.SelectedValue != null)
+            {
+                settings.DefaultModel = DefaultModelComboBox.SelectedValue.ToString() ?? "ggml-base.bin";
+            }
+            
+            if (DefaultLanguageComboBox.SelectedItem is ComboBoxItem selectedLanguage)
+            {
+                settings.DefaultLanguage = selectedLanguage.Content.ToString() ?? "auto";
+            }
+            
+            if (!string.IsNullOrEmpty(QueueFileLocationTextBox.Text))
+            {
+                settings.LastQueuePath = QueueFileLocationTextBox.Text;
+            }
+            
+            // Save settings
+            _settingsService.SaveSettings();
+            
+            // Update system tray if needed
+            if (_systemTrayService != null)
+            {
+                _systemTrayService.SetEnabled(settings.SystemTrayEnabled);
+            }
+            
+            // Update original settings to reflect saved state
+            _originalSettings = CopySettings(settings);
+            
+            SettingsSaved?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            ShowErrorDialog($"Failed to save settings: {ex.Message}");
+        }
+    }
+
+    private void CancelSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Restore original settings
+        var settings = _settingsService.Settings;
+        settings.OutputDirectory = _originalSettings.OutputDirectory;
+        settings.DefaultModel = _originalSettings.DefaultModel;
+        settings.DefaultLanguage = _originalSettings.DefaultLanguage;
+        settings.Recursive = _originalSettings.Recursive;
+        settings.SystemTrayEnabled = _originalSettings.SystemTrayEnabled;
+        settings.MinimizeToTray = _originalSettings.MinimizeToTray;
+        settings.CloseToTray = _originalSettings.CloseToTray;
+        settings.OpenOutputAfterCompletion = _originalSettings.OpenOutputAfterCompletion;
+        settings.LastQueuePath = _originalSettings.LastQueuePath;
+        
+        SettingsCancelled?.Invoke(this, EventArgs.Empty);
+    }
+
+    private AppSettings CopySettings(AppSettings source)
+    {
+        return new AppSettings
+        {
+            OutputDirectory = source.OutputDirectory,
+            DefaultModel = source.DefaultModel,
+            DefaultLanguage = source.DefaultLanguage,
+            Recursive = source.Recursive,
+            WindowWidth = source.WindowWidth,
+            WindowHeight = source.WindowHeight,
+            WindowX = source.WindowX,
+            WindowY = source.WindowY,
+            LastQueuePath = source.LastQueuePath,
+            SystemTrayEnabled = source.SystemTrayEnabled,
+            MinimizeToTray = source.MinimizeToTray,
+            CloseToTray = source.CloseToTray,
+            OpenOutputAfterCompletion = source.OpenOutputAfterCompletion
+        };
+    }
+
+    private async void ShowErrorDialog(string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Error",
+            Content = message,
+            CloseButtonText = "OK",
+            XamlRoot = this.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+}

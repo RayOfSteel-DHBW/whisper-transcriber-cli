@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
@@ -36,9 +37,22 @@ public class SystemCheckService
     {
         try
         {
-            // Try to get FFmpeg version
-            var ffmpegVersion = await FFMpegCore.FFMpeg.GetVersionAsync();
-            return !string.IsNullOrEmpty(ffmpegVersion);
+            // Try to run FFmpeg to check if it's available
+            var processInfo = new ProcessStartInfo
+            {
+                FileName = "ffmpeg",
+                Arguments = "-version",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = processInfo };
+            process.Start();
+            await process.WaitForExitAsync();
+            
+            return process.ExitCode == 0;
         }
         catch (Exception)
         {

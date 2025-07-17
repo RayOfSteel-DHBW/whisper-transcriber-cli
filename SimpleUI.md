@@ -143,16 +143,16 @@ whisper-transcriber-cli
 - [x] Implement status bar with modern progress indicators and ETA
 - [x] Add context menu for task list using MenuFlyout (remove, retry, open output, etc.)
 - [x] Add application settings persistence using WinUI 3 ApplicationData
-- [ ] Implement modern drag-and-drop with visual feedback
+- [x] Implement modern drag-and-drop with visual feedback
 - [x] Add keyboard shortcuts and accelerator keys
-- [ ] Create system tray integration with Windows 11 notifications
-- [ ] Implement minimize to tray functionality (minimize button and window state handling)
-- [ ] Add system tray context menu (Show/Hide, Start/Pause Queue, Exit)
-- [ ] Add option for close button to minimize to tray instead of exit
-- [ ] Add Settings page using modern WinUI 3 controls
-- [ ] Add About dialog with modern styling and version info
-- [ ] Implement light/dark theme support with system theme detection
-- [ ] Add post-processing options with toggle switches
+- [x] Create system tray integration with Windows 11 notifications
+- [x] Implement minimize to tray functionality (minimize button and window state handling)
+- [x] Add system tray context menu (Show/Hide, Start/Pause Queue, Exit)
+- [x] Add option for close button to minimize to tray instead of exit
+- [x] Add Settings page using modern WinUI 3 controls
+- [x] Add About dialog with modern styling and version info
+- [x] Implement light/dark theme support with system theme detection
+- [x] Add post-processing options with toggle switches
 
 ### Phase 6: Integration & Testing
 - [ ] Test queue persistence across application restarts
@@ -161,7 +161,7 @@ whisper-transcriber-cli
 - [ ] Test with various file types and models
 - [ ] Performance testing with large queues
 - [ ] User acceptance testing
-- [ ] Test FFmpeg availability check at startup
+- [x] Test FFmpeg availability check at startup
 - [ ] Test system tray functionality and notifications
 - [ ] Test minimize to tray behavior and restore functionality
 - [ ] Validate tray icon context menu and double-click behavior

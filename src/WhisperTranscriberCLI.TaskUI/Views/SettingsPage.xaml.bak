@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Page
+    x:Class="WhisperTranscriberCLI.TaskUI.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="16">
+            <TextBlock Text="Settings" FontSize="24" FontWeight="Bold" Margin="0,0,0,8"/>
+            
+            <!-- General Settings -->
+            <Expander Header="General Settings" IsExpanded="True">
+                <StackPanel Spacing="12" Margin="0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Default Output Directory" FontWeight="SemiBold"/>
+                            <TextBlock Text="Where transcription files will be saved by default" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <TextBox x:Name="OutputDirectoryTextBox" Width="300" PlaceholderText="C:\audio\transcripts"/>
+                            <Button x:Name="BrowseOutputDirectoryButton" Content="Browse..." Click="BrowseOutputDirectoryButton_Click"/>
+                        </StackPanel>
+                    </Grid>
+                    
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Default Whisper Model" FontWeight="SemiBold"/>
+                            <TextBlock Text="Model used for new transcription tasks" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <ComboBox x:Name="DefaultModelComboBox" Grid.Column="1" Width="200" SelectionChanged="DefaultModelComboBox_SelectionChanged"/>
+                    </Grid>
+                    
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Default Language" FontWeight="SemiBold"/>
+                            <TextBlock Text="Language used for new transcription tasks" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <ComboBox x:Name="DefaultLanguageComboBox" Grid.Column="1" Width="120" SelectionChanged="DefaultLanguageComboBox_SelectionChanged">
+                            <ComboBoxItem Content="auto"/>
+                            <ComboBoxItem Content="en"/>
+                            <ComboBoxItem Content="es"/>
+                            <ComboBoxItem Content="fr"/>
+                            <ComboBoxItem Content="de"/>
+                            <ComboBoxItem Content="it"/>
+                            <ComboBoxItem Content="pt"/>
+                            <ComboBoxItem Content="ru"/>
+                            <ComboBoxItem Content="ja"/>
+                            <ComboBoxItem Content="ko"/>
+                            <ComboBoxItem Content="zh"/>
+                        </ComboBox>
+                    </Grid>
+                    
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Recursive Folder Search" FontWeight="SemiBold"/>
+                            <TextBlock Text="Search subfolders when adding folders" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="RecursiveToggleSwitch" Grid.Column="1" Toggled="RecursiveToggleSwitch_Toggled"/>
+                    </Grid>
+                </StackPanel>
+            </Expander>
+            
+            <!-- System Tray Settings -->
+            <Expander Header="System Tray" IsExpanded="True">
+                <StackPanel Spacing="12" Margin="0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Enable System Tray" FontWeight="SemiBold"/>
+                            <TextBlock Text="Show app icon in system tray" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="SystemTrayToggleSwitch" Grid.Column="1" Toggled="SystemTrayToggleSwitch_Toggled"/>
+                    </Grid>
+                    
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Minimize to Tray" FontWeight="SemiBold"/>
+                            <TextBlock Text="Minimize to system tray instead of taskbar" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="MinimizeToTrayToggleSwitch" Grid.Column="1" Toggled="MinimizeToTrayToggleSwitch_Toggled"/>
+                    </Grid>
+                    
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Close to Tray" FontWeight="SemiBold"/>
+                            <TextBlock Text="Close to system tray instead of exiting" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="CloseToTrayToggleSwitch" Grid.Column="1" Toggled="CloseToTrayToggleSwitch_Toggled"/>
+                    </Grid>
+                </StackPanel>
+            </Expander>
+            
+            <!-- Post-Processing Settings -->
+            <Expander Header="Post-Processing" IsExpanded="False">
+                <StackPanel Spacing="12" Margin="0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Open Output After Completion" FontWeight="SemiBold"/>
+                            <TextBlock Text="Automatically open transcription files when complete" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="OpenOutputToggleSwitch" Grid.Column="1" Toggled="OpenOutputToggleSwitch_Toggled"/>
+                    </Grid>
+                    
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Auto-save Queue" FontWeight="SemiBold"/>
+                            <TextBlock Text="Automatically save queue every 5 minutes" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="AutoSaveToggleSwitch" Grid.Column="1" IsOn="True" IsEnabled="False"/>
+                    </Grid>
+                </StackPanel>
+            </Expander>
+            
+            <!-- Advanced Settings -->
+            <Expander Header="Advanced" IsExpanded="False">
+                <StackPanel Spacing="12" Margin="0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Queue File Location" FontWeight="SemiBold"/>
+                            <TextBlock Text="Location of the persistent queue file" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <TextBox x:Name="QueueFileLocationTextBox" Width="300" IsReadOnly="True"/>
+                            <Button x:Name="BrowseQueueLocationButton" Content="Browse..." Click="BrowseQueueLocationButton_Click"/>
+                        </StackPanel>
+                    </Grid>
+                    
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Reset All Settings" FontWeight="SemiBold"/>
+                            <TextBlock Text="Restore all settings to default values" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" FontSize="12"/>
+                        </StackPanel>
+                        <Button x:Name="ResetSettingsButton" Grid.Column="1" Content="Reset Settings" Click="ResetSettingsButton_Click"/>
+                    </Grid>
+                </StackPanel>
+            </Expander>
+            
+            <!-- Action Buttons -->
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,16,0,0">
+                <Button x:Name="SaveSettingsButton" Content="Save" Style="{ThemeResource AccentButtonStyle}" Click="SaveSettingsButton_Click"/>
+                <Button x:Name="CancelSettingsButton" Content="Cancel" Click="CancelSettingsButton_Click"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
