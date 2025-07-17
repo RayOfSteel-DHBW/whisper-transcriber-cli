@@ -142,7 +142,7 @@ whisper-transcriber-cli
 - [x] Add modern progress rings and bars for individual tasks
 - [x] Implement status bar with modern progress indicators and ETA
 - [x] Add context menu for task list using MenuFlyout (remove, retry, open output, etc.)
-- [ ] Add application settings persistence using WinUI 3 ApplicationData
+- [x] Add application settings persistence using WinUI 3 ApplicationData
 - [ ] Implement modern drag-and-drop with visual feedback
 - [x] Add keyboard shortcuts and accelerator keys
 - [ ] Create system tray integration with Windows 11 notifications
