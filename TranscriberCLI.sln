@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "whisper-transcriber-cli", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WhisperTranscriberCLI.Core", "src\WhisperTranscriberCLI.Core\WhisperTranscriberCLI.Core.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F23456789012}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WhisperTranscriberCLI.TaskUI", "src\WhisperTranscriberCLI.TaskUI\WhisperTranscriberCLI.TaskUI.csproj", "{C3D4E5F6-A7B8-9012-CDEF-345678901234}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "whisper-transcriber-cli.Tests", "tests\whisper-transcriber-cli.Tests.csproj", "{90F2B2FC-C65F-43F5-BFC8-18885E03A61A}"
@@ -45,6 +47,18 @@ Global
 		{B2C3D4E5-F6A7-8901-BCDE-F23456789012}.Release|x64.Build.0 = Release|Any CPU
 		{B2C3D4E5-F6A7-8901-BCDE-F23456789012}.Release|x86.ActiveCfg = Release|Any CPU
 		{B2C3D4E5-F6A7-8901-BCDE-F23456789012}.Release|x86.Build.0 = Release|Any CPU
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Debug|Any CPU.Build.0 = Debug|x64
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Debug|x64.ActiveCfg = Debug|x64
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Debug|x64.Build.0 = Debug|x64
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Debug|x86.ActiveCfg = Debug|x86
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Debug|x86.Build.0 = Debug|x86
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Release|Any CPU.ActiveCfg = Release|x64
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Release|Any CPU.Build.0 = Release|x64
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Release|x64.ActiveCfg = Release|x64
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Release|x64.Build.0 = Release|x64
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Release|x86.ActiveCfg = Release|x86
+		{C3D4E5F6-A7B8-9012-CDEF-345678901234}.Release|x86.Build.0 = Release|x86
 		{90F2B2FC-C65F-43F5-BFC8-18885E03A61A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{90F2B2FC-C65F-43F5-BFC8-18885E03A61A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{90F2B2FC-C65F-43F5-BFC8-18885E03A61A}.Debug|x64.ActiveCfg = Debug|Any CPU

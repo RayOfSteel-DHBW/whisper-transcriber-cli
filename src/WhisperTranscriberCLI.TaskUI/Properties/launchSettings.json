@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "WhisperTranscriberCLI.TaskUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "WhisperTranscriberCLI.TaskUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
