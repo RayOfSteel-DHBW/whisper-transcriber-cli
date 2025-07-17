@@ -8,7 +8,24 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
     
+    <Page.Resources>
+        <Style TargetType="Button" x:Key="KeyboardShortcutStyle">
+            <Setter Property="ToolTipService.ToolTip" Value="{Binding Tag, RelativeSource={RelativeSource Self}}"/>
+        </Style>
+    </Page.Resources>
+
     <Grid>
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="O" Modifiers="Control" Invoked="OpenFiles_Invoked"/>
+            <KeyboardAccelerator Key="O" Modifiers="Control,Shift" Invoked="OpenFolder_Invoked"/>
+            <KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveQueue_Invoked"/>
+            <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="LoadQueue_Invoked"/>
+            <KeyboardAccelerator Key="F5" Invoked="StartQueue_Invoked"/>
+            <KeyboardAccelerator Key="Pause" Invoked="PauseQueue_Invoked"/>
+            <KeyboardAccelerator Key="Escape" Invoked="CancelQueue_Invoked"/>
+            <KeyboardAccelerator Key="Delete" Invoked="DeleteTask_Invoked"/>
+            <KeyboardAccelerator Key="F1" Invoked="ShowHelp_Invoked"/>
+        </Grid.KeyboardAccelerators>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -35,8 +52,8 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 
-                <Button x:Name="AddFilesButton" Grid.Column="0" Content="Add Files..." Margin="0,0,8,0" Click="AddFilesButton_Click"/>
-                <Button x:Name="AddFolderButton" Grid.Column="1" Content="Add Folder..." Margin="0,0,8,0" Click="AddFolderButton_Click"/>
+                <Button x:Name="AddFilesButton" Grid.Column="0" Content="Add Files..." Margin="0,0,8,0" Click="AddFilesButton_Click" ToolTipService.ToolTip="Add Files (Ctrl+O)"/>
+                <Button x:Name="AddFolderButton" Grid.Column="1" Content="Add Folder..." Margin="0,0,8,0" Click="AddFolderButton_Click" ToolTipService.ToolTip="Add Folder (Ctrl+Shift+O)"/>
                 <CheckBox x:Name="RecursiveCheckBox" Grid.Column="2" Content="Recursive" Margin="0,0,12,0" IsChecked="True"/>
                 
                 <TextBlock Grid.Column="3" Text="Model:" VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -73,7 +90,19 @@
         </Grid>
         
         <!-- Task list -->
-        <ListView x:Name="TaskListView" Grid.Row="2" Margin="12,0,12,12" SelectionMode="Single">
+        <ListView x:Name="TaskListView" Grid.Row="2" Margin="12,0,12,12" SelectionMode="Single" RightTapped="TaskListView_RightTapped">
+            <ListView.ContextFlyout>
+                <MenuFlyout>
+                    <MenuFlyoutItem x:Name="RemoveTaskMenuItem" Text="Remove" Icon="Delete" Click="RemoveTaskMenuItem_Click"/>
+                    <MenuFlyoutItem x:Name="RetryTaskMenuItem" Text="Retry" Icon="Refresh" Click="RetryTaskMenuItem_Click"/>
+                    <MenuFlyoutSeparator/>
+                    <MenuFlyoutItem x:Name="OpenOutputMenuItem" Text="Open Output" Icon="OpenFile" Click="OpenOutputMenuItem_Click"/>
+                    <MenuFlyoutItem x:Name="OpenFolderMenuItem" Text="Open Folder" Icon="OpenLocal" Click="OpenFolderMenuItem_Click"/>
+                    <MenuFlyoutSeparator/>
+                    <MenuFlyoutItem x:Name="CopyPathMenuItem" Text="Copy Path" Icon="Copy" Click="CopyPathMenuItem_Click"/>
+                    <MenuFlyoutItem x:Name="ShowPropertiesMenuItem" Text="Properties" Icon="Setting" Click="ShowPropertiesMenuItem_Click"/>
+                </MenuFlyout>
+            </ListView.ContextFlyout>
             <ListView.Header>
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -122,17 +151,17 @@
             </Grid.ColumnDefinitions>
             
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
-                <Button x:Name="StartQueueButton" Content="▶ Start Queue" Click="StartQueueButton_Click"/>
-                <Button x:Name="PauseQueueButton" Content="⏸ Pause" Click="PauseQueueButton_Click"/>
-                <Button x:Name="CancelCurrentButton" Content="⏹ Cancel Current" Click="CancelCurrentButton_Click"/>
-                <Button x:Name="ClearDoneButton" Content="🗑 Clear Done" Click="ClearDoneButton_Click"/>
+                <Button x:Name="StartQueueButton" Content="▶ Start Queue" Click="StartQueueButton_Click" ToolTipService.ToolTip="Start Queue (F5)"/>
+                <Button x:Name="PauseQueueButton" Content="⏸ Pause" Click="PauseQueueButton_Click" ToolTipService.ToolTip="Pause Queue (Pause)"/>
+                <Button x:Name="CancelCurrentButton" Content="⏹ Cancel Current" Click="CancelCurrentButton_Click" ToolTipService.ToolTip="Cancel Queue (Esc)"/>
+                <Button x:Name="ClearDoneButton" Content="🗑 Clear Done" Click="ClearDoneButton_Click" ToolTipService.ToolTip="Clear Completed Tasks"/>
             </StackPanel>
             
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                <Button x:Name="SaveQueueButton" Content="💾 Save Queue" Click="SaveQueueButton_Click"/>
-                <Button x:Name="LoadQueueButton" Content="📁 Load Queue" Click="LoadQueueButton_Click"/>
+                <Button x:Name="SaveQueueButton" Content="💾 Save Queue" Click="SaveQueueButton_Click" ToolTipService.ToolTip="Save Queue (Ctrl+S)"/>
+                <Button x:Name="LoadQueueButton" Content="📁 Load Queue" Click="LoadQueueButton_Click" ToolTipService.ToolTip="Load Queue (Ctrl+L)"/>
                 <Button x:Name="SettingsButton" Content="🔧 Settings" Click="SettingsButton_Click"/>
-                <Button x:Name="AboutButton" Content="? About" Click="AboutButton_Click"/>
+                <Button x:Name="AboutButton" Content="? About" Click="AboutButton_Click" ToolTipService.ToolTip="About (F1)"/>
             </StackPanel>
         </Grid>
         

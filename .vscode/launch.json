@@ -1,0 +1,32 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch WinUI 3 App",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/WhisperTranscriberCLI.TaskUI/bin/Debug/net8.0-windows10.0.19041.0/win-x64/WhisperTranscriberCLI.TaskUI.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "preLaunchTask": "build-winui"
+        },
+        {
+            "name": "Launch CLI App",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/WhisperTranscriberCLI.Cli/bin/Debug/net8.0/whisper-transcriber-cli.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "preLaunchTask": "build-cli"
+        },
+        {
+            "name": "Attach to Process",
+            "type": "coreclr",
+            "request": "attach"
+        }
+    ]
+}

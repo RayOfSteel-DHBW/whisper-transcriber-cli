@@ -1,10 +1,13 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using System;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
@@ -290,5 +293,205 @@ public sealed partial class MainPage : Page
     private void UpdateStatus(string message)
     {
         StatusTextBlock.Text = message;
+    }
+
+    // Context menu event handlers
+    private void TaskListView_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        var listView = sender as ListView;
+        var item = (e.OriginalSource as FrameworkElement)?.DataContext as TaskViewModel;
+        if (item != null)
+        {
+            listView.SelectedItem = item;
+            
+            // Update menu item visibility based on task status
+            RetryTaskMenuItem.IsEnabled = item.Status == "Error";
+            OpenOutputMenuItem.IsEnabled = !string.IsNullOrEmpty(item.OutputPath) && File.Exists(item.OutputPath);
+            OpenFolderMenuItem.IsEnabled = !string.IsNullOrEmpty(item.OutputPath) && File.Exists(item.OutputPath);
+        }
+    }
+
+    private async void RemoveTaskMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedTask = TaskListView.SelectedItem as TaskViewModel;
+        if (selectedTask != null && _queueManager != null)
+        {
+            await _queueManager.RemoveTaskAsync(selectedTask.Id);
+            _tasks.Remove(selectedTask);
+            UpdateStatus($"Removed task: {selectedTask.FileName}");
+        }
+    }
+
+    private async void RetryTaskMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedTask = TaskListView.SelectedItem as TaskViewModel;
+        if (selectedTask != null && _queueManager != null)
+        {
+            // Find the task in the queue and reset its status
+            var task = _queueManager.Queue.Tasks.FirstOrDefault(t => t.Id == selectedTask.Id);
+            if (task != null)
+            {
+                task.Status = Core.Models.TaskStatus.Pending;
+                task.ErrorMessage = null;
+                task.Progress = 0;
+                selectedTask.Status = "Pending";
+                selectedTask.ErrorMessage = null;
+                selectedTask.Progress = 0;
+                
+                await _queueManager.SaveQueueAsync();
+                UpdateStatus($"Reset task for retry: {selectedTask.FileName}");
+            }
+        }
+    }
+
+    private async void OpenOutputMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedTask = TaskListView.SelectedItem as TaskViewModel;
+        if (selectedTask != null && !string.IsNullOrEmpty(selectedTask.OutputPath))
+        {
+            try
+            {
+                var storageFile = await StorageFile.GetFileFromPathAsync(selectedTask.OutputPath);
+                await Windows.System.Launcher.LaunchFileAsync(storageFile);
+            }
+            catch (Exception ex)
+            {
+                UpdateStatus($"Failed to open output: {ex.Message}");
+            }
+        }
+    }
+
+    private async void OpenFolderMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedTask = TaskListView.SelectedItem as TaskViewModel;
+        if (selectedTask != null && !string.IsNullOrEmpty(selectedTask.OutputPath))
+        {
+            try
+            {
+                var folderPath = Path.GetDirectoryName(selectedTask.OutputPath);
+                if (!string.IsNullOrEmpty(folderPath))
+                {
+                    var storageFolder = await StorageFolder.GetFolderFromPathAsync(folderPath);
+                    await Windows.System.Launcher.LaunchFolderAsync(storageFolder);
+                }
+            }
+            catch (Exception ex)
+            {
+                UpdateStatus($"Failed to open folder: {ex.Message}");
+            }
+        }
+    }
+
+    private void CopyPathMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedTask = TaskListView.SelectedItem as TaskViewModel;
+        if (selectedTask != null)
+        {
+            var dataPackage = new DataPackage();
+            dataPackage.SetText(selectedTask.FilePath);
+            Clipboard.SetContent(dataPackage);
+            UpdateStatus($"Copied path to clipboard: {selectedTask.FileName}");
+        }
+    }
+
+    private async void ShowPropertiesMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedTask = TaskListView.SelectedItem as TaskViewModel;
+        if (selectedTask != null)
+        {
+            var properties = $"File: {selectedTask.FileName}\n" +
+                           $"Full Path: {selectedTask.FilePath}\n" +
+                           $"Duration: {selectedTask.Duration}\n" +
+                           $"Model: {selectedTask.ModelName}\n" +
+                           $"Language: {selectedTask.Language}\n" +
+                           $"Status: {selectedTask.Status}\n" +
+                           $"Progress: {selectedTask.Progress:F1}%";
+            
+            if (!string.IsNullOrEmpty(selectedTask.ErrorMessage))
+            {
+                properties += $"\nError: {selectedTask.ErrorMessage}";
+            }
+            
+            if (!string.IsNullOrEmpty(selectedTask.OutputPath))
+            {
+                properties += $"\nOutput: {selectedTask.OutputPath}";
+            }
+
+            var dialog = new ContentDialog
+            {
+                Title = "Task Properties",
+                Content = new ScrollViewer
+                {
+                    Content = new TextBlock
+                    {
+                        Text = properties,
+                        IsTextSelectionEnabled = true,
+                        TextWrapping = TextWrapping.Wrap
+                    }
+                },
+                CloseButtonText = "Close",
+                XamlRoot = this.XamlRoot
+            };
+
+            await dialog.ShowAsync();
+        }
+    }
+
+    // Keyboard accelerator handlers
+    private void OpenFiles_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        AddFilesButton_Click(null, null);
+        args.Handled = true;
+    }
+
+    private void OpenFolder_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        AddFolderButton_Click(null, null);
+        args.Handled = true;
+    }
+
+    private void SaveQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        SaveQueueButton_Click(null, null);
+        args.Handled = true;
+    }
+
+    private void LoadQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        LoadQueueButton_Click(null, null);
+        args.Handled = true;
+    }
+
+    private void StartQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        StartQueueButton_Click(null, null);
+        args.Handled = true;
+    }
+
+    private void PauseQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        PauseQueueButton_Click(null, null);
+        args.Handled = true;
+    }
+
+    private void CancelQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        CancelCurrentButton_Click(null, null);
+        args.Handled = true;
+    }
+
+    private void DeleteTask_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (TaskListView.SelectedItem != null)
+        {
+            RemoveTaskMenuItem_Click(null, null);
+        }
+        args.Handled = true;
+    }
+
+    private void ShowHelp_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        AboutButton_Click(null, null);
+        args.Handled = true;
     }
 }
