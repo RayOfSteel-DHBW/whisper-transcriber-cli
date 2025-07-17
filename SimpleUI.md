@@ -98,49 +98,49 @@ whisper-transcriber-cli
 ## Implementation Checklist
 
 ### Phase 1: Project Setup
-- [ ] Conduct spike to identify hidden CLI dependencies
-- [ ] Create `WhisperTranscriberCLI.Core` class library project
-- [ ] Extract transcription logic from CLI to Core project  
-- [ ] Create `WhisperTranscriberCLI.TaskUI` WinUI 3 project
-- [ ] Rename current `src/` to `WhisperTranscriberCLI.Cli`
-- [ ] Update solution file with new project structure
-- [ ] Update CLI project to reference Core library
+- [x] Conduct spike to identify hidden CLI dependencies
+- [x] Create `WhisperTranscriberCLI.Core` class library project
+- [x] Extract transcription logic from CLI to Core project  
+- [x] Create `WhisperTranscriberCLI.TaskUI` WinUI 3 project
+- [x] Rename current `src/` to `WhisperTranscriberCLI.Cli`
+- [x] Update solution file with new project structure
+- [x] Update CLI project to reference Core library
 
 ### Phase 2: Core Shared Logic
-- [ ] Add JSON schema version field to persistence format
-- [ ] Create `TranscriptionTask` data model
-- [ ] Create `TranscriptionQueue` class with JSON persistence
-- [ ] Create `ModelDiscovery` class to scan whispermodels directory
-- [ ] Extract `ITranscriptionService` interface from existing service
-- [ ] Create `TranscriptionProgress` event/callback system
-- [ ] Add error handling and logging to core services
+- [x] Add JSON schema version field to persistence format
+- [x] Create `TranscriptionTask` data model
+- [x] Create `TranscriptionQueue` class with JSON persistence
+- [x] Create `ModelDiscovery` class to scan whispermodels directory
+- [x] Extract `ITranscriptionService` interface from existing service
+- [x] Create `TranscriptionProgress` event/callback system
+- [x] Add error handling and logging to core services
 
 ### Phase 3: Basic UI Implementation  
-- [ ] Create MainWindow with modern WinUI 3 layout and XAML
-- [ ] Add modern file picker for "Add Files..." button
-- [ ] Add folder picker for "Add Folder..." with recursive toggle switch
-- [ ] Create ListView/DataGrid for task list with modern styling
-- [ ] Add ComboBox for model selection with modern design
-- [ ] Add ComboBox for language selection (auto-detect default)
-- [ ] Add folder picker for output directory
-- [ ] Implement task list data binding with ObservableCollection
-- [ ] Add modern button controls with Fluent icons (Start/Pause/Cancel/Clear)
-- [ ] Add Save/Load Queue buttons with modern file dialogs
+- [x] Create MainWindow with modern WinUI 3 layout and XAML
+- [x] Add modern file picker for "Add Files..." button
+- [x] Add folder picker for "Add Folder..." with recursive toggle switch
+- [x] Create ListView/DataGrid for task list with modern styling
+- [x] Add ComboBox for model selection with modern design
+- [x] Add ComboBox for language selection (auto-detect default)
+- [x] Add folder picker for output directory
+- [x] Implement task list data binding with ObservableCollection
+- [x] Add modern button controls with Fluent icons (Start/Pause/Cancel/Clear)
+- [x] Add Save/Load Queue buttons with modern file dialogs
 
 ### Phase 4: Queue Management
-- [ ] Implement JSON persistence for task queue
-- [ ] Add task status tracking and updates
-- [ ] Create background worker for queue processing
-- [ ] Implement progress reporting per task with ETA calculation
-- [ ] Add error handling and retry logic
-- [ ] Implement queue pause/resume functionality
+- [x] Implement JSON persistence for task queue
+- [x] Add task status tracking and updates
+- [x] Create background worker for queue processing
+- [x] Implement progress reporting per task with ETA calculation
+- [x] Add error handling and retry logic
+- [x] Implement queue pause/resume functionality
 - [ ] Add audio duration detection using FFmpeg
-- [ ] Implement auto-save every 5 minutes
-- [ ] Add cancellation support for current task
+- [x] Implement auto-save every 5 minutes
+- [x] Add cancellation support for current task
 
 ### Phase 5: UI Polish
-- [ ] Add modern progress rings and bars for individual tasks
-- [ ] Implement status bar with modern progress indicators and ETA
+- [x] Add modern progress rings and bars for individual tasks
+- [x] Implement status bar with modern progress indicators and ETA
 - [ ] Add context menu for task list using MenuFlyout (remove, retry, open output, etc.)
 - [ ] Add application settings persistence using WinUI 3 ApplicationData
 - [ ] Implement modern drag-and-drop with visual feedback
