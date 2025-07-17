@@ -134,7 +134,7 @@ whisper-transcriber-cli
 - [x] Implement progress reporting per task with ETA calculation
 - [x] Add error handling and retry logic
 - [x] Implement queue pause/resume functionality
-- [ ] Add audio duration detection using FFmpeg
+- [x] Add audio duration detection using FFmpeg
 - [x] Implement auto-save every 5 minutes
 - [x] Add cancellation support for current task
 

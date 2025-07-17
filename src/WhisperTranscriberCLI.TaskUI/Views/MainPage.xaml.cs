@@ -18,12 +18,14 @@ public sealed partial class MainPage : Page
 {
     private readonly ObservableCollection<TaskViewModel> _tasks = new();
     private readonly ModelDiscovery _modelDiscovery;
+    private readonly AudioDurationService _audioDurationService;
     private QueueManager? _queueManager;
     
     public MainPage()
     {
         this.InitializeComponent();
         _modelDiscovery = new ModelDiscovery();
+        _audioDurationService = new AudioDurationService();
         
         TaskListView.ItemsSource = _tasks;
         LoadModels();
@@ -123,12 +125,16 @@ public sealed partial class MainPage : Page
 
         foreach (var filePath in filePaths)
         {
+            UpdateStatus($"Analyzing {Path.GetFileName(filePath)}...");
+            var duration = await _audioDurationService.GetDurationAsync(filePath);
+            var formattedDuration = _audioDurationService.FormatDuration(duration);
+            
             var task = new TranscriptionTask
             {
                 FilePath = filePath,
                 ModelName = selectedModel,
                 Language = selectedLanguage,
-                Duration = "00:00:00",
+                Duration = formattedDuration,
                 Status = Core.Models.TaskStatus.Pending
             };
 
