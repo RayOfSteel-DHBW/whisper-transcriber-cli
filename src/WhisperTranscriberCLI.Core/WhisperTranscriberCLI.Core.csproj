@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>WhisperTranscriberCLI.Core</RootNamespace>
+    <AssemblyName>WhisperTranscriberCLI.Core</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Whisper.net" Version="1.7.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.7.1" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.7.1" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.7.1" />
+    <PackageReference Include="FFMpegCore" Version="5.1.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+</Project>

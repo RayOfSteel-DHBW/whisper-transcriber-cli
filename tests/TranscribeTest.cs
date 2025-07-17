@@ -3,7 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
-using WhisperTranscriberCLI.Services;
+using WhisperTranscriberCLI.Core.Services;
 
 namespace whisper_transcriber_cli.Tests;
 

@@ -17,11 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Whisper.net" Version="1.7.1" />
-    <PackageReference Include="Whisper.net.Runtime" Version="1.7.1" />
-    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.7.1" />
-    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.7.1" />
-    <PackageReference Include="FFMpegCore" Version="5.1.0" />
+    <ProjectReference Include="..\WhisperTranscriberCLI.Core\WhisperTranscriberCLI.Core.csproj" />
   </ItemGroup>
 
   <!-- Exclude macOS Metal files from Windows builds -->
@@ -42,7 +38,7 @@
 
   <!-- Include whisper models in publish output but exclude from single-file bundle -->
   <ItemGroup>
-    <None Include="whispermodels\*.bin" Condition="Exists('whispermodels')">
+    <None Include="..\..\whispermodels\*.bin" Condition="Exists('..\..\whispermodels')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
 using WhisperTranscriberCLI.Utilities;
-using WhisperTranscriberCLI.Services;
+using WhisperTranscriberCLI.Core.Services;
 
 namespace WhisperTranscriberCLI
 {
