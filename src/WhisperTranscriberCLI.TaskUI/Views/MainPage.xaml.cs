@@ -13,6 +13,7 @@ using Windows.Storage.Pickers;
 using WinRT.Interop;
 using WhisperTranscriberCLI.Core.Models;
 using WhisperTranscriberCLI.Core.Services;
+using WhisperTranscriberCLI.TaskUI.Services;
 using WhisperTranscriberCLI.TaskUI.ViewModels;
 
 namespace WhisperTranscriberCLI.TaskUI.Views;
@@ -22,6 +23,7 @@ public sealed partial class MainPage : Page
     private readonly ObservableCollection<TaskViewModel> _tasks = new();
     private readonly ModelDiscovery _modelDiscovery;
     private readonly AudioDurationService _audioDurationService;
+    private readonly SettingsService _settingsService;
     private QueueManager? _queueManager;
     
     public MainPage()
@@ -29,9 +31,11 @@ public sealed partial class MainPage : Page
         this.InitializeComponent();
         _modelDiscovery = new ModelDiscovery();
         _audioDurationService = new AudioDurationService();
+        _settingsService = new SettingsService();
         
         TaskListView.ItemsSource = _tasks;
         LoadModels();
+        LoadSettings();
         InitializeQueueManager();
     }
 
@@ -44,7 +48,34 @@ public sealed partial class MainPage : Page
         
         if (models.Count > 0)
         {
-            ModelComboBox.SelectedIndex = 0;
+            // Try to select the saved default model
+            var defaultModel = models.FirstOrDefault(m => m.Name == _settingsService.Settings.DefaultModel);
+            if (defaultModel != null)
+            {
+                ModelComboBox.SelectedItem = defaultModel;
+            }
+            else
+            {
+                ModelComboBox.SelectedIndex = 0;
+            }
+        }
+    }
+
+    private void LoadSettings()
+    {
+        var settings = _settingsService.Settings;
+        
+        // Load UI settings
+        OutputDirectoryTextBox.Text = settings.OutputDirectory;
+        RecursiveCheckBox.IsChecked = settings.Recursive;
+        
+        // Set default language
+        var languageItems = LanguageComboBox.Items.Cast<ComboBoxItem>();
+        var defaultLanguageItem = languageItems.FirstOrDefault(item => 
+            item.Content.ToString() == settings.DefaultLanguage);
+        if (defaultLanguageItem != null)
+        {
+            LanguageComboBox.SelectedItem = defaultLanguageItem;
         }
     }
 
@@ -216,6 +247,8 @@ public sealed partial class MainPage : Page
         if (_queueManager != null)
         {
             await _queueManager.SaveQueueAsync();
+            var queuePath = Path.Combine(Directory.GetCurrentDirectory(), "shared", "TranscriptionQueue.json");
+            _settingsService.UpdateLastQueuePath(queuePath);
             UpdateStatus("Queue saved");
         }
     }
@@ -242,12 +275,33 @@ public sealed partial class MainPage : Page
         if (folder != null)
         {
             OutputDirectoryTextBox.Text = folder.Path;
+            _settingsService.UpdateOutputDirectory(folder.Path);
         }
     }
 
     private void ModelComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Model selection changed
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is ModelInfo selectedModel)
+        {
+            _settingsService.UpdateDefaultModel(selectedModel.Name);
+        }
+    }
+
+    private void RecursiveCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox checkBox)
+        {
+            _settingsService.UpdateRecursive(checkBox.IsChecked == true);
+        }
+    }
+
+    private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is ComboBoxItem selectedItem)
+        {
+            var language = selectedItem.Content.ToString() ?? "auto";
+            _settingsService.UpdateDefaultLanguage(language);
+        }
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)

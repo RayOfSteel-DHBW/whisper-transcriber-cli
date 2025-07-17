@@ -141,10 +141,10 @@ whisper-transcriber-cli
 ### Phase 5: UI Polish
 - [x] Add modern progress rings and bars for individual tasks
 - [x] Implement status bar with modern progress indicators and ETA
-- [ ] Add context menu for task list using MenuFlyout (remove, retry, open output, etc.)
+- [x] Add context menu for task list using MenuFlyout (remove, retry, open output, etc.)
 - [ ] Add application settings persistence using WinUI 3 ApplicationData
 - [ ] Implement modern drag-and-drop with visual feedback
-- [ ] Add keyboard shortcuts and accelerator keys
+- [x] Add keyboard shortcuts and accelerator keys
 - [ ] Create system tray integration with Windows 11 notifications
 - [ ] Implement minimize to tray functionality (minimize button and window state handling)
 - [ ] Add system tray context menu (Show/Hide, Start/Pause Queue, Exit)
