@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>WhisperTranscriberCLI</RootNamespace>
+    <AssemblyName>whisper-transcriber-cli</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    
+    <!-- Single file publishing configuration -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>link</TrimMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Whisper.net" Version="1.7.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.7.1" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.7.1" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.7.1" />
+    <PackageReference Include="FFMpegCore" Version="5.1.0" />
+  </ItemGroup>
+
+  <!-- Exclude macOS Metal files from Windows builds -->
+  <ItemGroup>
+    <Content Remove="**\ggml-metal.metal" />
+    <None Remove="**\ggml-metal.metal" />
+    <ResolvedFileToPublish Remove="**\ggml-metal.metal" />
+  </ItemGroup>
+
+  <!-- Exclude macOS-specific runtime files when publishing for Windows -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <ResolvedFileToPublish Remove="**/macos-*/**" />
+    <ResolvedFileToPublish Remove="**/linux-*/**" />
+    <ResolvedFileToPublish Remove="**/*ggml-metal.metal" />
+    <ResolvedFileToPublish Remove="**/*.dylib" />
+    <ResolvedFileToPublish Remove="**/*.so" />
+  </ItemGroup>
+
+  <!-- Include whisper models in publish output but exclude from single-file bundle -->
+  <ItemGroup>
+    <None Include="whispermodels\*.bin" Condition="Exists('whispermodels')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </None>
+  </ItemGroup>
+
+</Project>
