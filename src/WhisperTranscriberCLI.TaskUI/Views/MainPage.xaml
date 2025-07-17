@@ -90,7 +90,7 @@
         </Grid>
         
         <!-- Task list -->
-        <ListView x:Name="TaskListView" Grid.Row="2" Margin="12,0,12,12" SelectionMode="Single" RightTapped="TaskListView_RightTapped">
+        <ListView x:Name="TaskListView" Grid.Row="2" Margin="12,0,12,12" SelectionMode="Single" RightTapped="TaskListView_RightTapped" AllowDrop="True" Drop="TaskListView_Drop" DragOver="TaskListView_DragOver">
             <ListView.ContextFlyout>
                 <MenuFlyout>
                     <MenuFlyoutItem x:Name="RemoveTaskMenuItem" Text="Remove" Icon="Delete" Click="RemoveTaskMenuItem_Click"/>

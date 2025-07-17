@@ -24,6 +24,7 @@ public sealed partial class MainPage : Page
     private readonly ModelDiscovery _modelDiscovery;
     private readonly AudioDurationService _audioDurationService;
     private readonly SettingsService _settingsService;
+    private readonly SystemCheckService _systemCheckService;
     private QueueManager? _queueManager;
     
     public MainPage()
@@ -32,11 +33,14 @@ public sealed partial class MainPage : Page
         _modelDiscovery = new ModelDiscovery();
         _audioDurationService = new AudioDurationService();
         _settingsService = new SettingsService();
+        _systemCheckService = new SystemCheckService();
         
         TaskListView.ItemsSource = _tasks;
         LoadModels();
         LoadSettings();
         InitializeQueueManager();
+        InitializeTheme();
+        _ = CheckSystemRequirementsAsync();
     }
 
     private void LoadModels()
@@ -76,6 +80,102 @@ public sealed partial class MainPage : Page
         if (defaultLanguageItem != null)
         {
             LanguageComboBox.SelectedItem = defaultLanguageItem;
+        }
+    }
+
+    private void InitializeTheme()
+    {
+        // Set the app theme to follow system theme
+        if (App.MainWindow.Content is FrameworkElement rootElement)
+        {
+            rootElement.RequestedTheme = Microsoft.UI.Xaml.ElementTheme.Default;
+        }
+    }
+
+    private async Task CheckSystemRequirementsAsync()
+    {
+        try
+        {
+            UpdateStatus("Checking system requirements...");
+            var result = await _systemCheckService.CheckSystemRequirementsAsync();
+            
+            if (result.IsSystemReady)
+            {
+                UpdateStatus("System ready for transcription");
+            }
+            else
+            {
+                UpdateStatus(result.GetStatusMessage());
+                await ShowSystemRequirementsDialog(result);
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus($"System check failed: {ex.Message}");
+        }
+    }
+
+    private async Task ShowSystemRequirementsDialog(SystemCheckResult result)
+    {
+        var content = new StackPanel { Spacing = 12 };
+        
+        content.Children.Add(new TextBlock
+        {
+            Text = "System Requirements Check",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold
+        });
+        
+        content.Children.Add(new TextBlock
+        {
+            Text = result.GetStatusMessage(),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        
+        if (!result.FFmpegAvailable)
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = "FFmpeg Installation:",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = _systemCheckService.GetFFmpegInstallationInstructions(),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+        }
+        
+        if (!result.WhisperModelsAvailable)
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = "Whisper Models:",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = _systemCheckService.GetWhisperModelsInstructions(),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "System Requirements",
+            Content = new ScrollViewer { Content = content },
+            PrimaryButtonText = "Check Again",
+            CloseButtonText = "Continue Anyway",
+            XamlRoot = this.XamlRoot
+        };
+
+        var dialogResult = await dialog.ShowAsync();
+        if (dialogResult == ContentDialogResult.Primary)
+        {
+            await CheckSystemRequirementsAsync();
         }
     }
 
@@ -309,9 +409,90 @@ public sealed partial class MainPage : Page
         UpdateStatus("Settings not yet implemented");
     }
 
-    private void AboutButton_Click(object sender, RoutedEventArgs e)
+    private async void AboutButton_Click(object sender, RoutedEventArgs e)
     {
-        UpdateStatus("About: Whisper Transcription Queue UI v1.0");
+        var aboutDialog = new ContentDialog
+        {
+            Title = "About Whisper Transcription Queue",
+            Content = new ScrollViewer
+            {
+                Content = new StackPanel
+                {
+                    Spacing = 12,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = "Whisper Transcription Queue",
+                            FontSize = 20,
+                            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                            HorizontalAlignment = HorizontalAlignment.Center
+                        },
+                        new TextBlock
+                        {
+                            Text = "Version 1.0.0",
+                            FontSize = 14,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            Margin = new Thickness(0, 0, 0, 8)
+                        },
+                        new TextBlock
+                        {
+                            Text = "A modern WinUI 3 application for batch audio/video transcription using OpenAI Whisper.",
+                            TextWrapping = TextWrapping.Wrap,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            Margin = new Thickness(0, 0, 0, 8)
+                        },
+                        new TextBlock
+                        {
+                            Text = "Features:",
+                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                            Margin = new Thickness(0, 8, 0, 4)
+                        },
+                        new TextBlock
+                        {
+                            Text = "• Batch transcription with queue management\n• Multiple audio/video format support\n• Real-time progress tracking\n• Automatic queue persistence\n• Keyboard shortcuts and context menus\n• Settings persistence",
+                            TextWrapping = TextWrapping.Wrap,
+                            Margin = new Thickness(16, 0, 0, 8)
+                        },
+                        new TextBlock
+                        {
+                            Text = "Supported Formats:",
+                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                            Margin = new Thickness(0, 8, 0, 4)
+                        },
+                        new TextBlock
+                        {
+                            Text = "MP3, WAV, MP4, AVI, MKV, M4A, FLAC, OGG, WEBM, WMA",
+                            TextWrapping = TextWrapping.Wrap,
+                            Margin = new Thickness(16, 0, 0, 8)
+                        },
+                        new TextBlock
+                        {
+                            Text = "Requirements:",
+                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                            Margin = new Thickness(0, 8, 0, 4)
+                        },
+                        new TextBlock
+                        {
+                            Text = "• Windows 10 version 1903 or later\n• .NET 8.0 Runtime\n• FFmpeg (for audio processing)\n• Whisper model files in whispermodels/ folder",
+                            TextWrapping = TextWrapping.Wrap,
+                            Margin = new Thickness(16, 0, 0, 8)
+                        },
+                        new TextBlock
+                        {
+                            Text = "🤖 Generated with Claude Code",
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            Margin = new Thickness(0, 12, 0, 0),
+                            FontStyle = Microsoft.UI.Text.FontStyle.Italic
+                        }
+                    }
+                }
+            },
+            CloseButtonText = "Close",
+            XamlRoot = this.XamlRoot
+        };
+
+        await aboutDialog.ShowAsync();
     }
 
     private void OnQueueStatusChanged(object? sender, Core.Events.TranscriptionStatusEventArgs e)
@@ -547,5 +728,89 @@ public sealed partial class MainPage : Page
     {
         AboutButton_Click(null, null);
         args.Handled = true;
+    }
+
+    // Drag and drop handlers
+    private void TaskListView_DragOver(object sender, DragEventArgs e)
+    {
+        e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+        
+        if (e.DragUIOverride != null)
+        {
+            e.DragUIOverride.Caption = "Drop files to add to queue";
+            e.DragUIOverride.IsGlyphVisible = true;
+            e.DragUIOverride.IsContentVisible = true;
+        }
+    }
+
+    private async void TaskListView_Drop(object sender, DragEventArgs e)
+    {
+        try
+        {
+            if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+            {
+                var items = await e.DataView.GetStorageItemsAsync();
+                var filePaths = new List<string>();
+                
+                foreach (var item in items)
+                {
+                    if (item is StorageFile file)
+                    {
+                        filePaths.Add(file.Path);
+                    }
+                    else if (item is StorageFolder folder)
+                    {
+                        await ProcessDroppedFolderAsync(folder, filePaths);
+                    }
+                }
+                
+                if (filePaths.Count > 0)
+                {
+                    // Filter for supported file types
+                    var supportedExtensions = new[] { ".mp3", ".wav", ".mp4", ".avi", ".mkv", ".m4a", ".flac", ".ogg", ".webm", ".wma" };
+                    var supportedFiles = filePaths.Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLower())).ToList();
+                    
+                    if (supportedFiles.Count > 0)
+                    {
+                        await AddFilesToQueue(supportedFiles);
+                        UpdateStatus($"Added {supportedFiles.Count} files via drag and drop");
+                    }
+                    else
+                    {
+                        UpdateStatus("No supported audio/video files found in dropped items");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus($"Error processing dropped files: {ex.Message}");
+        }
+    }
+
+    private async Task ProcessDroppedFolderAsync(StorageFolder folder, List<string> filePaths)
+    {
+        try
+        {
+            var files = await folder.GetFilesAsync();
+            foreach (var file in files)
+            {
+                filePaths.Add(file.Path);
+            }
+            
+            // Recursively process subfolders if recursive is enabled
+            if (RecursiveCheckBox.IsChecked == true)
+            {
+                var subfolders = await folder.GetFoldersAsync();
+                foreach (var subfolder in subfolders)
+                {
+                    await ProcessDroppedFolderAsync(subfolder, filePaths);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus($"Error processing folder {folder.Name}: {ex.Message}");
+        }
     }
 }
