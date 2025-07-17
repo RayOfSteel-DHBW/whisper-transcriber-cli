@@ -2,6 +2,25 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
+using WhisperTranscriberCLI.Core.Models;
+using WhisperTranscriberCLI.Core.Services;
+using WhisperTranscriberCLI.TaskUI.Services;
+using WhisperTranscriberCLI.TaskUI.ViewModels;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Navigation;
+using Windows.UI.Text;Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
@@ -488,8 +507,7 @@ public sealed partial class MainPage : Page
                         {
                             Text = "🤖 Generated with Claude Code",
                             HorizontalAlignment = HorizontalAlignment.Center,
-                            Margin = new Thickness(0, 12, 0, 0),
-                            FontStyle = Microsoft.UI.Text.FontStyle.Italic
+                            Margin = new Thickness(0, 12, 0, 0)
                         }
                     }
                 }
@@ -909,7 +927,7 @@ public sealed partial class MainPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            App.MainWindow.Hide();
+            App.MainWindow.AppWindow.Hide();
         });
     }
 
@@ -923,7 +941,7 @@ public sealed partial class MainPage : Page
     {
         if (_settingsService.Settings.MinimizeToTray && _settingsService.Settings.SystemTrayEnabled)
         {
-            App.MainWindow.Hide();
+            App.MainWindow.AppWindow.Hide();
         }
     }
 

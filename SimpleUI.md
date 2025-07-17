@@ -155,17 +155,17 @@ whisper-transcriber-cli
 - [x] Add post-processing options with toggle switches
 
 ### Phase 6: Integration & Testing
-- [ ] Test queue persistence across application restarts
-- [ ] Test error scenarios and recovery
-- [ ] Add unit tests for core logic
-- [ ] Test with various file types and models
-- [ ] Performance testing with large queues
-- [ ] User acceptance testing
+- [x] Test queue persistence across application restarts
+- [x] Test error scenarios and recovery
+- [x] Add unit tests for core logic
+- [x] Test with various file types and models
+- [x] Performance testing with large queues
+- [x] User acceptance testing
 - [x] Test FFmpeg availability check at startup
-- [ ] Test system tray functionality and notifications
-- [ ] Test minimize to tray behavior and restore functionality
-- [ ] Validate tray icon context menu and double-click behavior
-- [ ] Validate auto-save and crash recovery
+- [x] Test system tray functionality and notifications
+- [x] Test minimize to tray behavior and restore functionality
+- [x] Validate tray icon context menu and double-click behavior
+- [x] Validate auto-save and crash recovery
 
 ### Phase 7: Documentation & Distribution
 - [ ] Update README.md with UI documentation

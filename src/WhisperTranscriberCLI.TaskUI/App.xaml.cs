@@ -1,3 +1,5 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using WhisperTranscriberCLI.TaskUI.Views;
 
@@ -57,7 +59,7 @@ namespace WhisperTranscriberCLI.TaskUI
                 {
                     // Cancel the close and hide instead
                     args.Handled = true;
-                    window.Hide();
+                    window.AppWindow.Hide();
                     return;
                 }
             }

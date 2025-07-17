@@ -3,9 +3,10 @@
     "tasks": [
         {
             "label": "build-winui",
-            "type": "dotnet",
-            "command": "build",
+            "type": "shell",
+            "command": "dotnet",
             "args": [
+                "build",
                 "${workspaceFolder}/src/WhisperTranscriberCLI.TaskUI/WhisperTranscriberCLI.TaskUI.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
@@ -18,9 +19,10 @@
         },
         {
             "label": "build-cli",
-            "type": "dotnet",
-            "command": "build",
+            "type": "shell",
+            "command": "dotnet",
             "args": [
+                "build",
                 "${workspaceFolder}/src/WhisperTranscriberCLI.Cli/whisper-transcriber-cli.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
@@ -33,9 +35,10 @@
         },
         {
             "label": "build-core",
-            "type": "dotnet",
-            "command": "build",
+            "type": "shell",
+            "command": "dotnet",
             "args": [
+                "build",
                 "${workspaceFolder}/src/WhisperTranscriberCLI.Core/WhisperTranscriberCLI.Core.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
@@ -48,9 +51,10 @@
         },
         {
             "label": "build-all",
-            "type": "dotnet",
-            "command": "build",
+            "type": "shell",
+            "command": "dotnet",
             "args": [
+                "build",
                 "${workspaceFolder}/TranscriberCLI.sln",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
@@ -61,6 +65,21 @@
             },
             "presentation": {
                 "reveal": "silent"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "run-cli",
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}/src/WhisperTranscriberCLI.Cli/whisper-transcriber-cli.csproj"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always"
             },
             "problemMatcher": "$msCompile"
         }

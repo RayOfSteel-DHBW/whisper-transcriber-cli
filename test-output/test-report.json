@@ -1,0 +1,169 @@
+{
+  "Passed": 27,
+  "Details": [
+    {
+      "Name": "FFmpeg Availability",
+      "Timestamp": "2025-07-17T22:25:27.0783066+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "Whisper Models Directory",
+      "Timestamp": "2025-07-17T22:25:27.0809995+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "Whisper Model Files Available",
+      "Timestamp": "2025-07-17T22:25:27.0873705+02:00",
+      "Details": "4 models found",
+      "Success": true
+    },
+    {
+      "Name": "Sufficient Disk Space",
+      "Timestamp": "2025-07-17T22:25:27.3016737+02:00",
+      "Details": "71.41 GB available",
+      "Success": true
+    },
+    {
+      "Name": "Queue File Creation",
+      "Timestamp": "2025-07-17T22:25:27.3356907+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "Queue File Structure",
+      "Timestamp": "2025-07-17T22:25:27.3605113+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "Queue Task Data",
+      "Timestamp": "2025-07-17T22:25:27.3628659+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "Invalid Queue File Created",
+      "Timestamp": "2025-07-17T22:25:27.3666618+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "Non-existent File Test Setup",
+      "Timestamp": "2025-07-17T22:25:27.3675892+02:00",
+      "Details": "File should not exist for this test",
+      "Success": true
+    },
+    {
+      "Name": "Large Queue Creation Performance",
+      "Timestamp": "2025-07-17T22:25:27.3873488+02:00",
+      "Details": "Took 11.32ms for 100 tasks",
+      "Success": true
+    },
+    {
+      "Name": "Large Queue Loading Performance",
+      "Timestamp": "2025-07-17T22:25:27.4269146+02:00",
+      "Details": "Took 38.46ms to load 100 tasks",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Support: .mp3",
+      "Timestamp": "2025-07-17T22:25:27.4286912+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Support: .wav",
+      "Timestamp": "2025-07-17T22:25:27.4291086+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Support: .mp4",
+      "Timestamp": "2025-07-17T22:25:27.4295175+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Support: .avi",
+      "Timestamp": "2025-07-17T22:25:27.4300392+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Support: .mkv",
+      "Timestamp": "2025-07-17T22:25:27.4304988+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Support: .m4a",
+      "Timestamp": "2025-07-17T22:25:27.4309044+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Support: .flac",
+      "Timestamp": "2025-07-17T22:25:27.4312927+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Support: .ogg",
+      "Timestamp": "2025-07-17T22:25:27.4317773+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Support: .webm",
+      "Timestamp": "2025-07-17T22:25:27.4321503+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Support: .wma",
+      "Timestamp": "2025-07-17T22:25:27.432506+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Rejection: .txt",
+      "Timestamp": "2025-07-17T22:25:27.4330607+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Rejection: .doc",
+      "Timestamp": "2025-07-17T22:25:27.4334626+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Rejection: .pdf",
+      "Timestamp": "2025-07-17T22:25:27.4339292+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "File Extension Rejection: .exe",
+      "Timestamp": "2025-07-17T22:25:27.4342935+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "Auto-save Functionality",
+      "Timestamp": "2025-07-17T22:25:27.8105553+02:00",
+      "Details": "",
+      "Success": true
+    },
+    {
+      "Name": "Settings Persistence",
+      "Timestamp": "2025-07-17T22:25:27.8308217+02:00",
+      "Details": "",
+      "Success": true
+    }
+  ],
+  "Failed": 0,
+  "Total": 27
+}

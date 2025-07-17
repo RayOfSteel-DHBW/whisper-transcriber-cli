@@ -1,0 +1,15 @@
+{
+  "WindowX": 100,
+  "MinimizeToTray": true,
+  "LastQueuePath": "",
+  "Recursive": true,
+  "SystemTrayEnabled": true,
+  "OpenOutputAfterCompletion": false,
+  "CloseToTray": false,
+  "OutputDirectory": "test-output",
+  "DefaultModel": "ggml-base.bin",
+  "WindowHeight": 600,
+  "WindowWidth": 800,
+  "DefaultLanguage": "auto",
+  "WindowY": 100
+}
