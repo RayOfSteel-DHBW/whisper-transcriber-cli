@@ -109,6 +109,10 @@ public class SettingsService
             {
                 _settings.OpenOutputAfterCompletion = (bool)(_localSettings.Values["OpenOutputAfterCompletion"] ?? false);
             }
+            if (_localSettings?.Values.ContainsKey("UseGpu") == true)
+            {
+                _settings.UseGpu = (bool)(_localSettings.Values["UseGpu"] ?? false);
+            }
         }
         catch (Exception ex)
         {
@@ -167,6 +171,7 @@ public class SettingsService
                 _localSettings.Values["CloseToTray"] = _settings.CloseToTray;
                 _localSettings.Values["SystemTrayEnabled"] = _settings.SystemTrayEnabled;
                 _localSettings.Values["OpenOutputAfterCompletion"] = _settings.OpenOutputAfterCompletion;
+                _localSettings.Values["UseGpu"] = _settings.UseGpu;
             }
             else
             {
@@ -238,6 +243,12 @@ public class SettingsService
         _settings.LastQueuePath = path;
         SaveSettings();
     }
+
+    public void UpdateUseGpu(bool useGpu)
+    {
+        _settings.UseGpu = useGpu;
+        SaveSettings();
+    }
 }
 
 public class AppSettings
@@ -255,4 +266,5 @@ public class AppSettings
     public bool CloseToTray { get; set; } = false;
     public bool SystemTrayEnabled { get; set; } = true;
     public bool OpenOutputAfterCompletion { get; set; } = false;
+    public bool UseGpu { get; set; } = false;
 }

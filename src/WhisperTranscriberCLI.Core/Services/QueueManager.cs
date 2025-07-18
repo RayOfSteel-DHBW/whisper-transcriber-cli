@@ -15,16 +15,18 @@ public class QueueManager : IDisposable
     private TranscriptionQueue _queue;
     private bool _isProcessing;
     private bool _isPaused;
+    private bool _useGpu;
 
     public event EventHandler<TranscriptionProgressEventArgs>? ProgressChanged;
     public event EventHandler<TranscriptionStatusEventArgs>? StatusChanged;
     public event EventHandler<TranscriptionTask>? TaskCompleted;
     public event EventHandler<TranscriptionTask>? TaskFailed;
 
-    public QueueManager(string queueFilePath, IMediaConverter mediaConverter)
+    public QueueManager(string queueFilePath, IMediaConverter mediaConverter, bool useGpu = false)
     {
         _queueFilePath = queueFilePath;
         _mediaConverter = mediaConverter;
+        _useGpu = useGpu;
         _cancellationTokenSource = new CancellationTokenSource();
         _queueSemaphore = new SemaphoreSlim(1, 1);
         _queue = new TranscriptionQueue();
@@ -150,7 +152,7 @@ public class QueueManager : IDisposable
 
             var transcriptionService = new WhisperNetTranscriptionService(
                 _mediaConverter, 
-                false, 
+                _useGpu, 
                 task.ModelName
             );
 

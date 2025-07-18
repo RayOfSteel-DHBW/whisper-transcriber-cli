@@ -50,6 +50,9 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 
                 <Button x:Name="AddFilesButton" Grid.Column="0" Content="Add Files..." Margin="0,0,8,0" Click="AddFilesButton_Click" ToolTipService.ToolTip="Add Files (Ctrl+O)"/>
@@ -59,8 +62,8 @@
                 <TextBlock Grid.Column="3" Text="Model:" VerticalAlignment="Center" Margin="0,0,4,0"/>
                 <ComboBox x:Name="ModelComboBox" Grid.Column="4" Width="120" Margin="0,0,8,0" SelectionChanged="ModelComboBox_SelectionChanged"/>
                 
-                <TextBlock Grid.Column="5" Text="Lang:" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                <ComboBox x:Name="LanguageComboBox" Grid.Column="6" Width="80" SelectedIndex="0" SelectionChanged="LanguageComboBox_SelectionChanged">
+                <TextBlock Grid.Column="5" Text="Language:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox x:Name="LanguageComboBox" Grid.Column="6" Width="80" SelectedIndex="0" Margin="0,0,8,0" SelectionChanged="LanguageComboBox_SelectionChanged">
                     <ComboBoxItem Content="auto"/>
                     <ComboBoxItem Content="en"/>
                     <ComboBoxItem Content="es"/>
@@ -72,6 +75,12 @@
                     <ComboBoxItem Content="ja"/>
                     <ComboBoxItem Content="ko"/>
                     <ComboBoxItem Content="zh"/>
+                </ComboBox>
+                
+                <TextBlock Grid.Column="7" Text="Acceleration:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox x:Name="AccelerationComboBox" Grid.Column="8" Width="80" SelectedIndex="0" SelectionChanged="AccelerationComboBox_SelectionChanged">
+                    <ComboBoxItem Content="CPU"/>
+                    <ComboBoxItem Content="GPU"/>
                 </ComboBox>
             </Grid>
             

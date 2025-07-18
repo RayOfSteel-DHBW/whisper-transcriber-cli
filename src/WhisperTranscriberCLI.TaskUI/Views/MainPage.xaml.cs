@@ -92,6 +92,15 @@ public sealed partial class MainPage : Page
         {
             LanguageComboBox.SelectedItem = defaultLanguageItem;
         }
+        
+        // Set acceleration
+        var accelerationItems = AccelerationComboBox.Items.Cast<ComboBoxItem>();
+        var defaultAccelerationItem = accelerationItems.FirstOrDefault(item => 
+            item.Content.ToString() == (settings.UseGpu ? "GPU" : "CPU"));
+        if (defaultAccelerationItem != null)
+        {
+            AccelerationComboBox.SelectedItem = defaultAccelerationItem;
+        }
     }
 
     private void InitializeTheme()
@@ -196,7 +205,7 @@ public sealed partial class MainPage : Page
         {
             var queuePath = Path.Combine(Directory.GetCurrentDirectory(), "shared", "TranscriptionQueue.json");
             var mediaConverter = new FfmpegMediaConverter();
-            _queueManager = new QueueManager(queuePath, mediaConverter);
+            _queueManager = new QueueManager(queuePath, mediaConverter, _settingsService.Settings.UseGpu);
             
             _queueManager.StatusChanged += OnQueueStatusChanged;
             _queueManager.TaskCompleted += OnTaskCompleted;
@@ -207,6 +216,30 @@ public sealed partial class MainPage : Page
         catch (Exception ex)
         {
             UpdateStatus($"Failed to initialize queue manager: {ex.Message}");
+        }
+    }
+
+    private void ReinitializeQueueManager()
+    {
+        try
+        {
+            // Dispose existing queue manager
+            if (_queueManager != null)
+            {
+                _queueManager.StatusChanged -= OnQueueStatusChanged;
+                _queueManager.TaskCompleted -= OnTaskCompleted;
+                _queueManager.TaskFailed -= OnTaskFailed;
+                _queueManager.Dispose();
+            }
+            
+            // Create new queue manager with updated GPU setting
+            InitializeQueueManager();
+            
+            UpdateStatus($"Acceleration updated to: {(_settingsService.Settings.UseGpu ? "GPU" : "CPU")}");
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus($"Failed to reinitialize queue manager: {ex.Message}");
         }
     }
 
@@ -413,6 +446,18 @@ public sealed partial class MainPage : Page
         {
             var language = selectedItem.Content.ToString() ?? "auto";
             _settingsService.UpdateDefaultLanguage(language);
+        }
+    }
+
+    private void AccelerationComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is ComboBoxItem selectedItem && _isInitialized)
+        {
+            var useGpu = selectedItem.Content.ToString() == "GPU";
+            _settingsService.UpdateUseGpu(useGpu);
+            
+            // Reinitialize queue manager with new GPU setting
+            ReinitializeQueueManager();
         }
     }
 
