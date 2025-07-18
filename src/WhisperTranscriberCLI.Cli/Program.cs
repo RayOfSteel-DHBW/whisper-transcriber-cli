@@ -72,8 +72,7 @@ namespace WhisperTranscriberCLI
                 _logger?.LogInformation("Starting transcription process with model: {Model}, GPU: {UseGpu}", options.Model, options.UseGpu);
                 
                 var mediaConverter = new FfmpegMediaConverter();
-                var transcriptionService = new WhisperNetTranscriptionService(mediaConverter, options.UseGpu, options.Model);
-
+                
                 // Get files to process
                 var filesToProcess = GetFilesToProcess(options.InputPath, options.Recursive);
                 
@@ -100,6 +99,9 @@ namespace WhisperTranscriberCLI
 
                 foreach (string filePath in filesToProcess)
                 {
+                    // Create a new transcription service for each file to prevent memory leaks
+                    using var transcriptionService = new WhisperNetTranscriptionService(mediaConverter, options.UseGpu, options.Model);
+                    
                     try
                     {
                         Console.Write($"Processing: {Path.GetFileName(filePath)} ... ");
@@ -130,6 +132,7 @@ namespace WhisperTranscriberCLI
                             Console.WriteLine($"   Details: {ex}");
                         }
                     }
+                    // transcriptionService is automatically disposed here, releasing GPU memory
                 }
 
                 Console.WriteLine();

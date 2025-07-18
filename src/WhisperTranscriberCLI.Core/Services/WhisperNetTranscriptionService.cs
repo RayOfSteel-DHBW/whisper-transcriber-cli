@@ -13,18 +13,19 @@ using WhisperTranscriberCLI.Core.Events;
 
 namespace WhisperTranscriberCLI.Core.Services
 {
-    public sealed class WhisperNetTranscriptionService : ITranscriptionService
+    public sealed class WhisperNetTranscriptionService : ITranscriptionService, IDisposable
     {
-        private readonly WhisperFactory? _factory;
+        private WhisperFactory? _factory;
         private readonly IMediaConverter _converter;
         private readonly bool _isAvailable;
         private readonly string _unavailabilityReason;
         private readonly ILogger<WhisperNetTranscriptionService>? _logger;
+        private bool _disposed = false;
 
         public event EventHandler<TranscriptionProgressEventArgs>? ProgressChanged;
         
-        public bool IsAvailable => _isAvailable;
-        public string UnavailabilityReason => _unavailabilityReason;
+        public bool IsAvailable => _isAvailable && !_disposed;
+        public string UnavailabilityReason => _disposed ? "Service has been disposed" : _unavailabilityReason;
 
         public WhisperNetTranscriptionService(IMediaConverter converter, bool useGpu = false, string? modelName = null, ILogger<WhisperNetTranscriptionService>? logger = null)
         {
@@ -149,6 +150,11 @@ namespace WhisperTranscriberCLI.Core.Services
 
         public async Task<string> TranscribeAsync(string mediaPath, CancellationToken ct)
         {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(WhisperNetTranscriptionService));
+            }
+
             if (!_isAvailable || _factory == null)
             {
                 var error = $"Whisper transcription service is not available. Reason: {_unavailabilityReason}";
@@ -313,6 +319,38 @@ namespace WhisperTranscriberCLI.Core.Services
         private static string FormatTime(TimeSpan ts)
         {
             return ts.ToString(@"hh\:mm\:ss\,fff");
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                try
+                {
+                    _factory?.Dispose();
+                    _logger?.LogInformation("WhisperNetTranscriptionService disposed - GPU memory released");
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Error disposing WhisperFactory");
+                }
+                finally
+                {
+                    _factory = null;
+                    _disposed = true;
+                }
+            }
+        }
+
+        ~WhisperNetTranscriptionService()
+        {
+            Dispose(false);
         }
     }
 }

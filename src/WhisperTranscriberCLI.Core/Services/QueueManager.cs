@@ -254,6 +254,8 @@ public class QueueManager : IDisposable
 
     private async Task ProcessTaskAsync(TranscriptionTask task)
     {
+        WhisperNetTranscriptionService? transcriptionService = null;
+        
         try
         {
             _logger?.LogInformation("Starting transcription for task {TaskId}: {FilePath}", task.Id, task.FilePath);
@@ -351,11 +353,11 @@ public class QueueManager : IDisposable
 
             _logger?.LogInformation("Loading Whisper model for task {TaskId}: {ModelName}", task.Id, task.ModelName);
 
-            // Create transcription service with proper logger type
+            // Create transcription service with proper logger type and ensure proper disposal
             var transcriptionLogger = _logger as ILogger<WhisperNetTranscriptionService> ?? 
                                     new Microsoft.Extensions.Logging.Abstractions.NullLogger<WhisperNetTranscriptionService>();
             
-            var transcriptionService = new WhisperNetTranscriptionService(
+            transcriptionService = new WhisperNetTranscriptionService(
                 _mediaConverter, 
                 _useGpu, 
                 task.ModelName,
@@ -453,6 +455,22 @@ public class QueueManager : IDisposable
             }
             await UpdateTaskStatusAsync(task, Models.TaskStatus.Error);
             TaskFailed?.Invoke(this, task);
+        }
+        finally
+        {
+            // CRITICAL: Always dispose transcription service to release GPU memory
+            if (transcriptionService != null)
+            {
+                try
+                {
+                    transcriptionService.Dispose();
+                    _logger?.LogDebug("Disposed transcription service for task {TaskId} - GPU memory released", task.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Error disposing transcription service for task {TaskId}", task.Id);
+                }
+            }
         }
     }
 
