@@ -31,25 +31,51 @@ public sealed partial class MainPage : Page
     private readonly AudioDurationService _audioDurationService;
     private readonly SettingsService _settingsService;
     private readonly SystemCheckService _systemCheckService;
-    private readonly SystemTrayService _systemTrayService;
     private readonly ILogger<MainPage> _logger;
+    private SystemTrayService _systemTrayService = null!; // Will be initialized in SetupPage
     private QueueManager? _queueManager;
     private bool _isInitialized = false;
     
-    // Parameterless constructor for XAML (fallback)
-    public MainPage() : this(null)
-    {
-    }
-    
-    public MainPage(ILogger<MainPage>? logger)
+    // 1. Parameterless constructor for XAML
+    public MainPage()
     {
         InitializeComponent();
-        _logger = logger ?? App.Services?.GetService<ILogger<MainPage>>() ?? NullLogger<MainPage>.Instance;
-        _modelDiscovery = new ModelDiscovery(null);
-        _audioDurationService = new AudioDurationService(null);
-        _settingsService = new SettingsService(null);
-        _systemCheckService = new SystemCheckService(null);
-        _systemTrayService = new SystemTrayService(App.MainWindow, _settingsService, null);
+        
+        // Resolve dependencies from DI container with proper fallbacks
+        _logger = App.Services?.GetService<ILogger<MainPage>>() ?? NullLogger<MainPage>.Instance;
+        _settingsService = App.Services?.GetService<SettingsService>() ?? new SettingsService();
+        _systemCheckService = App.Services?.GetService<SystemCheckService>() ?? CreateFallbackSystemCheckService();
+        _modelDiscovery = App.Services?.GetService<ModelDiscovery>() ?? CreateFallbackModelDiscovery();
+        _audioDurationService = App.Services?.GetService<AudioDurationService>() ?? new AudioDurationService();
+        
+        // Common initialization
+        SetupPage();
+    }
+    
+    // 2. Constructor for DI (programmatic usage)
+    public MainPage(
+        ILogger<MainPage> logger,
+        SettingsService settingsService,
+        SystemCheckService systemCheckService,
+        ModelDiscovery modelDiscovery,
+        AudioDurationService audioDurationService)
+    {
+        InitializeComponent();
+        
+        _logger = logger;
+        _settingsService = settingsService;
+        _systemCheckService = systemCheckService;
+        _modelDiscovery = modelDiscovery;
+        _audioDurationService = audioDurationService;
+        
+        // Common initialization
+        SetupPage();
+    }
+    
+    // 3. Common setup logic
+    private void SetupPage()
+    {
+        _systemTrayService = new SystemTrayService(App.MainWindow, _settingsService);
         
         InitializeSystemTray();
         
@@ -335,14 +361,19 @@ public sealed partial class MainPage : Page
         {
             var queuePath = Path.Combine(Directory.GetCurrentDirectory(), "shared", "TranscriptionQueue.json");
             var mediaConverter = new FfmpegMediaConverter();
-            _queueManager = new QueueManager(queuePath, mediaConverter, _settingsService.Settings.UseGpu);
+            
+            // Create logger specifically for QueueManager to capture transcription errors
+            var queueLogger = App.Services?.GetService<ILogger<QueueManager>>();
+            _queueManager = new QueueManager(queuePath, mediaConverter, _settingsService.Settings.UseGpu, queueLogger);
             
             _queueManager.StatusChanged += OnQueueStatusChanged;
             _queueManager.TaskCompleted += OnTaskCompleted;
             _queueManager.TaskFailed += OnTaskFailed;
+            _queueManager.ProgressChanged += OnQueueProgressChanged;
             
             LoadExistingTasks();
             UpdateStatus("Queue manager initialized successfully");
+            _logger.LogInformation("QueueManager initialized with logging enabled");
         }
         catch (Exception ex)
         {
@@ -366,13 +397,15 @@ public sealed partial class MainPage : Page
                 _queueManager.StatusChanged -= OnQueueStatusChanged;
                 _queueManager.TaskCompleted -= OnTaskCompleted;
                 _queueManager.TaskFailed -= OnTaskFailed;
+                _queueManager.ProgressChanged -= OnQueueProgressChanged;
                 _queueManager.Dispose();
             }
             
-            // Create new queue manager with updated GPU setting
+            // Create new queue manager with updated GPU setting and logger
             InitializeQueueManager();
             
             UpdateStatus($"Acceleration updated to: {(_settingsService.Settings.UseGpu ? "GPU" : "CPU")}");
+            _logger.LogInformation("QueueManager reinitialized with GPU setting: {UseGpu}", _settingsService.Settings.UseGpu);
         }
         catch (Exception ex)
         {
@@ -855,6 +888,41 @@ public sealed partial class MainPage : Page
         });
     }
 
+    private void OnQueueProgressChanged(object? sender, Core.Events.TranscriptionProgressEventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            // Find the currently processing task and update its progress
+            var processingTask = _tasks.FirstOrDefault(t => t.Status == "Processing");
+            if (processingTask != null)
+            {
+                processingTask.Progress = e.Progress * 100; // Convert to percentage
+                
+                // Update status with processing speed and ETA if available
+                var fileName = Path.GetFileName(processingTask.FilePath);
+                var statusMessage = $"Processing: {fileName} ({processingTask.Progress:F1}%)";
+                
+                if (e.ProcessingSpeed > 0)
+                {
+                    statusMessage += $" • {e.ProcessingSpeed:F1}x speed";
+                }
+                
+                if (e.EstimatedTimeRemaining.TotalSeconds > 0)
+                {
+                    var eta = e.EstimatedTimeRemaining;
+                    if (eta.TotalHours >= 1)
+                        statusMessage += $" • ETA: {eta.Hours}h {eta.Minutes}m";
+                    else if (eta.TotalMinutes >= 1)
+                        statusMessage += $" • ETA: {eta.Minutes}m {eta.Seconds}s";
+                    else
+                        statusMessage += $" • ETA: {eta.Seconds}s";
+                }
+                
+                UpdateStatus(statusMessage);
+            }
+        });
+    }
+
     private void UpdateQueueProgress()
     {
         if (_queueManager == null) return;
@@ -1057,43 +1125,43 @@ public sealed partial class MainPage : Page
     // Keyboard accelerator handlers
     private void OpenFiles_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        AddFilesButton_Click(null, null);
+        AddFilesButton_Click(null!, null!);
         args.Handled = true;
     }
 
     private void OpenFolder_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        AddFolderButton_Click(null, null);
+        AddFolderButton_Click(null!, null!);
         args.Handled = true;
     }
 
     private void SaveQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        SaveQueueButton_Click(null, null);
+        SaveQueueButton_Click(null!, null!);
         args.Handled = true;
     }
 
     private void LoadQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        LoadQueueButton_Click(null, null);
+        LoadQueueButton_Click(null!, null!);
         args.Handled = true;
     }
 
     private void StartQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        StartQueueButton_Click(null, null);
+        StartQueueButton_Click(null!, null!);
         args.Handled = true;
     }
 
     private void PauseQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        PauseQueueButton_Click(null, null);
+        PauseQueueButton_Click(null!, null!);
         args.Handled = true;
     }
 
     private void CancelQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        CancelCurrentButton_Click(null, null);
+        CancelCurrentButton_Click(null!, null!);
         args.Handled = true;
     }
 
@@ -1101,14 +1169,14 @@ public sealed partial class MainPage : Page
     {
         if (TaskListView.SelectedItem != null)
         {
-            RemoveTaskMenuItem_Click(null, null);
+            RemoveTaskMenuItem_Click(null!, null!);
         }
         args.Handled = true;
     }
 
     private void ShowHelp_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        AboutButton_Click(null, null);
+        AboutButton_Click(null!, null!);
         args.Handled = true;
     }
 
@@ -1263,5 +1331,18 @@ public sealed partial class MainPage : Page
             UpdateStatus($"Failed to open output file: {ex.Message}");
             _logger.LogError(ex, "OpenOutputFileAsync error");
         }
+    }
+
+    // Helper methods for fallback service creation when DI is not available
+    private SystemCheckService CreateFallbackSystemCheckService()
+    {
+        var fallbackModelDiscovery = CreateFallbackModelDiscovery();
+        return new SystemCheckService(fallbackModelDiscovery, null);
+    }
+
+    private ModelDiscovery CreateFallbackModelDiscovery()
+    {
+        var fallbackUserSettings = new UserSettingsService();
+        return new ModelDiscovery(fallbackUserSettings, null);
     }
 }

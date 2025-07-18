@@ -13,11 +13,10 @@ public class SystemCheckService
     private readonly ModelDiscovery _modelDiscovery;
     private readonly ILogger<SystemCheckService>? _logger;
 
-    public SystemCheckService(ILogger<SystemCheckService>? logger = null)
+    public SystemCheckService(ModelDiscovery modelDiscovery, ILogger<SystemCheckService>? logger = null)
     {
         _logger = logger;
-        // Pass null to ModelDiscovery instead of mismatched logger type
-        _modelDiscovery = new ModelDiscovery(null);
+        _modelDiscovery = modelDiscovery;
     }
 
     public async Task<SystemCheckResult> CheckSystemRequirementsAsync()

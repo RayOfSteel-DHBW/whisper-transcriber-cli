@@ -202,7 +202,8 @@ namespace WhisperTranscriberCLI
         {
             Console.WriteLine("Available Whisper models:");
             
-            var modelDiscovery = new ModelDiscovery(null);
+            var userSettings = new UserSettingsService();
+            var modelDiscovery = new ModelDiscovery(userSettings, null);
             
             if (modelDiscovery.NeedsModelPathSetup)
             {
@@ -231,7 +232,8 @@ namespace WhisperTranscriberCLI
 
         private static string ShowModelPicker()
         {
-            var modelDiscovery = new ModelDiscovery(null);
+            var userSettings = new UserSettingsService();
+            var modelDiscovery = new ModelDiscovery(userSettings, null);
             
             if (modelDiscovery.NeedsModelPathSetup)
             {

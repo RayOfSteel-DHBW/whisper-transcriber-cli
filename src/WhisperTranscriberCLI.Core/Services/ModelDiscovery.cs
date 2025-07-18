@@ -8,11 +8,10 @@ public class ModelDiscovery
     private readonly ILogger<ModelDiscovery>? _logger;
     private string _modelDirectory;
 
-    public ModelDiscovery(ILogger<ModelDiscovery>? logger = null)
+    public ModelDiscovery(UserSettingsService settingsService, ILogger<ModelDiscovery>? logger = null)
     {
         _logger = logger;
-        // Pass null to UserSettingsService instead of mismatched logger type
-        _settingsService = new UserSettingsService(null);
+        _settingsService = settingsService;
         _modelDirectory = GetModelDirectory();
     }
 
@@ -123,7 +122,7 @@ public class ModelDiscovery
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to process model file {modelFile}: {ex.Message}");
+                    _logger?.LogWarning(ex, "Failed to process model file {ModelFile}", modelFile);
                     // Continue processing other files
                 }
             }
@@ -132,7 +131,7 @@ public class ModelDiscovery
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to get available models from {_modelDirectory}: {ex.Message}");
+            _logger?.LogError(ex, "Failed to get available models from {ModelDirectory}", _modelDirectory);
             return models;
         }
     }
@@ -265,7 +264,6 @@ public class ModelDiscovery
         }
         return $"{len:0.#} {sizes[order]}";
     }
-
 }
 
 public class ModelInfo

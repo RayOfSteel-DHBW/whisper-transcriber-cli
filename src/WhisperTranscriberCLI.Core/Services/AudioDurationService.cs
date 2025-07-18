@@ -1,15 +1,15 @@
 using FFMpegCore;
+using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 
 namespace WhisperTranscriberCLI.Core.Services;
 
 public class AudioDurationService
 {
     private readonly ILogger<AudioDurationService>? _logger;
-    
+
     public AudioDurationService(ILogger<AudioDurationService>? logger = null)
     {
         _logger = logger;
@@ -30,7 +30,7 @@ public class AudioDurationService
         catch (Exception ex)
         {
             // If FFmpeg analysis fails, return zero duration
-            _logger?.LogError(ex, "Failed to analyze audio duration for {FilePath}", filePath);
+            _logger?.LogWarning(ex, "Failed to analyze audio duration for {FilePath}", filePath);
             return TimeSpan.Zero;
         }
     }

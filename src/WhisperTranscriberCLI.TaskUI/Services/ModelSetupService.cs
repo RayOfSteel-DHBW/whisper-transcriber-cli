@@ -32,7 +32,9 @@ public class ModelSetupService
             var modelsPath = await BrowseForModelsDirectoryAsync();
             if (!string.IsNullOrEmpty(modelsPath))
             {
-                var modelDiscovery = new ModelDiscovery(null);
+                // Use proper service creation with dependencies
+                var userSettingsService = new UserSettingsService();
+                var modelDiscovery = new ModelDiscovery(userSettingsService);
                 modelDiscovery.SetModelDirectory(modelsPath);
                 return true;
             }
@@ -126,5 +128,27 @@ public class ModelSetupService
         });
 
         return stackPanel;
+    }
+
+    private async Task HandleModelSetupCompletion(bool setupComplete)
+    {
+        if (!setupComplete)
+        {
+            await ShowErrorDialogAsync("Model Setup Error", 
+                "Failed to configure Whisper models. Transcription features may not work correctly.");
+        }
+    }
+
+    private async Task ShowErrorDialogAsync(string title, string message)
+    {
+        var errorDialog = new ContentDialog
+        {
+            Title = title,
+            Content = message,
+            CloseButtonText = "OK",
+            XamlRoot = _parentWindow.Content.XamlRoot
+        };
+
+        await errorDialog.ShowAsync();
     }
 }

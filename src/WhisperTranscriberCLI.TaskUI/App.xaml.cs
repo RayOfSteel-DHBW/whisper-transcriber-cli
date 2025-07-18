@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WhisperTranscriberCLI.TaskUI.Views;
 using WhisperTranscriberCLI.TaskUI.Services;
+using WhisperTranscriberCLI.Core.Services;
 
 namespace WhisperTranscriberCLI.TaskUI
 {
@@ -28,12 +29,29 @@ namespace WhisperTranscriberCLI.TaskUI
         {
             InitializeComponent();
             
+#if DEBUG
+            // Enable immediate debug output flushing
+            System.Diagnostics.Debug.AutoFlush = true;
+#endif
+
             // Setup dependency injection and logging
             _host = Host.CreateDefaultBuilder()
                 .ConfigureServices(services =>
                 {
                     services.AddFileLogging();
-                    services.AddSingleton<MainPage>();
+                    
+                    // Register Core services (order matters!)
+                    services.AddSingleton<UserSettingsService>();
+                    services.AddSingleton<ModelDiscovery>();
+                    services.AddSingleton<AudioDurationService>();
+                    services.AddSingleton<SystemCheckService>();
+                    
+                    // Register TaskUI services
+                    services.AddSingleton<SettingsService>();
+                    // ModelSetupService removed - requires Window which isn't available at DI build time
+                    
+                    // Register MainPage with DI
+                    services.AddTransient<MainPage>();
                 })
                 .Build();
             

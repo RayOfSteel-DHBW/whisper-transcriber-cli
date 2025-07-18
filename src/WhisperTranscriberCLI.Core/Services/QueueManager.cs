@@ -151,28 +151,75 @@ public class QueueManager : IDisposable
     {
         try
         {
+            _logger?.LogInformation("Starting transcription for task {TaskId}: {FilePath}", task.Id, task.FilePath);
             await UpdateTaskStatusAsync(task, Models.TaskStatus.Processing);
 
+            // Create transcription service with proper logger type
+            var transcriptionLogger = _logger as ILogger<WhisperNetTranscriptionService> ?? 
+                                    new Microsoft.Extensions.Logging.Abstractions.NullLogger<WhisperNetTranscriptionService>();
+            
             var transcriptionService = new WhisperNetTranscriptionService(
                 _mediaConverter, 
                 _useGpu, 
-                task.ModelName
+                task.ModelName,
+                transcriptionLogger
             );
 
+            // Subscribe to progress events to forward to UI
+            transcriptionService.ProgressChanged += (sender, progressArgs) =>
+            {
+                // Update task progress
+                task.Progress = progressArgs.Progress * 100; // Convert to percentage
+                
+                // Forward progress event to UI
+                ProgressChanged?.Invoke(this, progressArgs);
+                
+                _logger?.LogTrace("Progress update for task {TaskId}: {Progress:F1}%", task.Id, task.Progress);
+            };
+
+            // Check if service is available before attempting transcription
+            if (!transcriptionService.IsAvailable)
+            {
+                var error = $"Transcription service not available: {transcriptionService.UnavailabilityReason}";
+                _logger?.LogError("Task {TaskId} failed - {Error}", task.Id, error);
+                throw new InvalidOperationException(error);
+            }
+
+            _logger?.LogInformation("Transcription service ready, starting transcription for {FilePath}", task.FilePath);
             var outputPath = await transcriptionService.TranscribeAsync(
                 task.FilePath, 
                 _cancellationTokenSource.Token
             );
 
+            if (string.IsNullOrEmpty(outputPath))
+            {
+                var error = "Transcription completed but no output file was created";
+                _logger?.LogError("Task {TaskId} failed - {Error}", task.Id, error);
+                throw new InvalidOperationException(error);
+            }
+
+            _logger?.LogInformation("Transcription completed successfully for task {TaskId}, output: {OutputPath}", task.Id, outputPath);
             task.OutputPath = outputPath;
             task.CompletedAt = DateTime.UtcNow;
             await UpdateTaskStatusAsync(task, Models.TaskStatus.Done);
 
             TaskCompleted?.Invoke(this, task);
         }
+        catch (OperationCanceledException)
+        {
+            _logger?.LogInformation("Transcription cancelled for task {TaskId}", task.Id);
+            task.ErrorMessage = "Transcription was cancelled";
+            await UpdateTaskStatusAsync(task, Models.TaskStatus.Error);
+            TaskFailed?.Invoke(this, task);
+        }
         catch (Exception ex)
         {
-            task.ErrorMessage = ex.Message;
+            _logger?.LogError(ex, "Transcription failed for task {TaskId}: {FilePath}", task.Id, task.FilePath);
+            task.ErrorMessage = $"{ex.GetType().Name}: {ex.Message}";
+            if (ex.InnerException != null)
+            {
+                task.ErrorMessage += $" -> {ex.InnerException.Message}";
+            }
             await UpdateTaskStatusAsync(task, Models.TaskStatus.Error);
             TaskFailed?.Invoke(this, task);
         }

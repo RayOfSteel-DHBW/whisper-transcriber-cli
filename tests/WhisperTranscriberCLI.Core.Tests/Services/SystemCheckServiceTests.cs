@@ -13,7 +13,9 @@ public class SystemCheckServiceTests : IDisposable
 
     public SystemCheckServiceTests()
     {
-        _systemCheckService = new SystemCheckService();
+        var userSettings = new UserSettingsService();
+        var modelDiscovery = new ModelDiscovery(userSettings);
+        _systemCheckService = new SystemCheckService(modelDiscovery);
         _testWhisperModelsDir = Path.Combine(Directory.GetCurrentDirectory(), "whispermodels");
     }
 
