@@ -87,6 +87,20 @@ public class QueueManager : IDisposable
         }
     }
 
+    public async Task ClearAllTasksAsync()
+    {
+        await _queueSemaphore.WaitAsync();
+        try
+        {
+            _queue.Tasks.Clear();
+            await SaveQueueAsync();
+        }
+        finally
+        {
+            _queueSemaphore.Release();
+        }
+    }
+
     public async Task StartProcessingAsync()
     {
         if (_isProcessing)
@@ -285,6 +299,36 @@ public class QueueManager : IDisposable
                 var json = File.ReadAllText(_queueFilePath);
                 var loadedQueue = JsonSerializer.Deserialize(json, TranscriptionQueueJsonContext.Default.TranscriptionQueue);
                 _queue = loadedQueue ?? new TranscriptionQueue();
+                
+                // Reset any tasks that were in "Processing" state back to "Pending"
+                // since we can't resume transcription from where it left off
+                var processingTasks = _queue.Tasks.Where(t => t.Status == Models.TaskStatus.Processing).ToList();
+                foreach (var task in processingTasks)
+                {
+                    _logger?.LogInformation("Resetting task {TaskId} from Processing to Pending (cannot resume): {FilePath}", 
+                        task.Id, task.FilePath);
+                    task.Status = Models.TaskStatus.Pending;
+                    task.Progress = 0; // Reset progress
+                    task.ErrorMessage = null; // Clear any error message
+                    // Keep CompletedAt and OutputPath as null since it wasn't completed
+                }
+                
+                if (processingTasks.Count > 0)
+                {
+                    _logger?.LogInformation("Reset {Count} processing tasks to pending on queue load", processingTasks.Count);
+                    // Save the queue immediately to persist the status changes
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await SaveQueueAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "Failed to save queue after resetting processing tasks");
+                        }
+                    });
+                }
             }
             else
             {

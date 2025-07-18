@@ -159,8 +159,22 @@ namespace WhisperTranscriberCLI.Core.Services
             _logger?.LogInformation("Starting transcription of: {MediaPath}", mediaPath);
 
             string wavPath = string.Empty;
+            TimeSpan? totalDuration = null;
+            
             try
             {
+                // Get the total audio duration first for accurate progress calculation
+                try
+                {
+                    var audioDurationService = new AudioDurationService();
+                    totalDuration = await audioDurationService.GetDurationAsync(mediaPath);
+                    _logger?.LogDebug("Total audio duration: {Duration}", totalDuration);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to get audio duration for progress calculation");
+                }
+                
                 _logger?.LogDebug("Creating Whisper processor");
                 await using WhisperProcessor processor = _factory.CreateBuilder()
                     .WithLanguage("auto")
@@ -200,17 +214,39 @@ namespace WhisperTranscriberCLI.Core.Services
                         if (elapsedWallTime.TotalSeconds > 0 && processedAudioTime.TotalSeconds > 0)
                         {
                             var speed = processedAudioTime.TotalSeconds / elapsedWallTime.TotalSeconds;
-                            var progress = processedAudioTime.TotalSeconds / (segments.Count > 0 ? segments.Last().End.TotalSeconds : processedAudioTime.TotalSeconds);
                             
-                            _logger?.LogDebug("Progress: {Progress:P1}, Speed: {Speed:F2}x, Processed: {ProcessedTime}", 
-                                progress, speed, processedAudioTime);
+                            // Calculate progress based on total file duration if available
+                            double progress = 0.0;
+                            TimeSpan estimatedTimeRemaining = TimeSpan.Zero;
+                            
+                            if (totalDuration.HasValue && totalDuration.Value.TotalSeconds > 0)
+                            {
+                                // Use known total duration for accurate progress
+                                progress = Math.Min(1.0, processedAudioTime.TotalSeconds / totalDuration.Value.TotalSeconds);
+                                
+                                if (speed > 0 && progress < 1.0)
+                                {
+                                    var remainingSeconds = totalDuration.Value.TotalSeconds - processedAudioTime.TotalSeconds;
+                                    estimatedTimeRemaining = TimeSpan.FromSeconds(remainingSeconds / speed);
+                                }
+                            }
+                            else
+                            {
+                                // Fallback: estimate progress based on current processing (less accurate)
+                                // This assumes we're making steady progress, but caps at 95% until completion
+                                var estimatedTotalDuration = processedAudioTime.TotalSeconds / Math.Max(0.1, speed * elapsedWallTime.TotalSeconds / processedAudioTime.TotalSeconds);
+                                progress = Math.Min(0.95, processedAudioTime.TotalSeconds / estimatedTotalDuration);
+                            }
+                            
+                            _logger?.LogDebug("Progress: {Progress:P1}, Speed: {Speed:F2}x, Processed: {ProcessedTime}, Total: {TotalDuration}", 
+                                progress, speed, processedAudioTime, totalDuration);
                             
                             ProgressChanged?.Invoke(this, new TranscriptionProgressEventArgs
                             {
-                                Progress = Math.Min(progress, 1.0),
+                                Progress = progress,
                                 ProcessedTime = processedAudioTime,
                                 ProcessingSpeed = speed,
-                                EstimatedTimeRemaining = speed > 0 ? TimeSpan.FromSeconds((1.0 - progress) * processedAudioTime.TotalSeconds / speed) : TimeSpan.Zero
+                                EstimatedTimeRemaining = estimatedTimeRemaining
                             });
                         }
                         

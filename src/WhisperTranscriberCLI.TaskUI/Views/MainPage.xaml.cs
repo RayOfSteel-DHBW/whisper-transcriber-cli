@@ -32,11 +32,10 @@ public sealed partial class MainPage : Page
     private readonly SettingsService _settingsService;
     private readonly SystemCheckService _systemCheckService;
     private readonly ILogger<MainPage> _logger;
-    private SystemTrayService _systemTrayService = null!; // Will be initialized in SetupPage
+    private SystemTrayService _systemTrayService = null!;
     private QueueManager? _queueManager;
     private bool _isInitialized = false;
     
-    // 1. Parameterless constructor for XAML
     public MainPage()
     {
         InitializeComponent();
@@ -48,11 +47,9 @@ public sealed partial class MainPage : Page
         _modelDiscovery = App.Services?.GetService<ModelDiscovery>() ?? CreateFallbackModelDiscovery();
         _audioDurationService = App.Services?.GetService<AudioDurationService>() ?? new AudioDurationService();
         
-        // Common initialization
         SetupPage();
     }
     
-    // 2. Constructor for DI (programmatic usage)
     public MainPage(
         ILogger<MainPage> logger,
         SettingsService settingsService,
@@ -68,11 +65,9 @@ public sealed partial class MainPage : Page
         _modelDiscovery = modelDiscovery;
         _audioDurationService = audioDurationService;
         
-        // Common initialization
         SetupPage();
     }
     
-    // 3. Common setup logic
     private void SetupPage()
     {
         _systemTrayService = new SystemTrayService(App.MainWindow, _settingsService);
@@ -87,13 +82,11 @@ public sealed partial class MainPage : Page
         
         _isInitialized = true;
         
-        // Don't run system checks here - wait until page is loaded
         Loaded += MainPage_Loaded;
     }
 
     private async void MainPage_Loaded(object sender, RoutedEventArgs e)
     {
-        // Now XamlRoot is available, safe to show dialogs
         try
         {
             await CheckSystemRequirementsAsync();
@@ -387,38 +380,6 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private void ReinitializeQueueManager()
-    {
-        try
-        {
-            // Dispose existing queue manager
-            if (_queueManager != null)
-            {
-                _queueManager.StatusChanged -= OnQueueStatusChanged;
-                _queueManager.TaskCompleted -= OnTaskCompleted;
-                _queueManager.TaskFailed -= OnTaskFailed;
-                _queueManager.ProgressChanged -= OnQueueProgressChanged;
-                _queueManager.Dispose();
-            }
-            
-            // Create new queue manager with updated GPU setting and logger
-            InitializeQueueManager();
-            
-            UpdateStatus($"Acceleration updated to: {(_settingsService.Settings.UseGpu ? "GPU" : "CPU")}");
-            _logger.LogInformation("QueueManager reinitialized with GPU setting: {UseGpu}", _settingsService.Settings.UseGpu);
-        }
-        catch (Exception ex)
-        {
-            var errorMessage = $"Failed to reinitialize queue manager: {ex.Message}";
-            UpdateStatus(errorMessage);
-            _logger.LogError(ex, "QueueManager reinitialization error");
-            
-            // Show error dialog asynchronously
-            _ = ShowErrorDialogAsync("Queue Manager Error", 
-                $"Failed to update queue manager settings:\n\n{ex.Message}\n\nThe previous settings will remain active.");
-        }
-    }
-
     private void LoadExistingTasks()
     {
         try
@@ -426,11 +387,29 @@ public sealed partial class MainPage : Page
             if (_queueManager != null)
             {
                 _tasks.Clear();
+                var resetTasksCount = 0;
+                
                 foreach (var task in _queueManager.Queue.Tasks)
                 {
-                    _tasks.Add(new TaskViewModel(task));
+                    var taskViewModel = new TaskViewModel(task);
+                    
+                    // Log if this task was reset from Processing to Pending
+                    if (task.Status == Core.Models.TaskStatus.Pending && task.Progress == 0)
+                    {
+                        // This might have been a processing task that was reset
+                        resetTasksCount++;
+                    }
+                    
+                    _tasks.Add(taskViewModel);
                 }
-                UpdateStatus($"Loaded {_tasks.Count} existing tasks from queue");
+                
+                var statusMessage = $"Loaded {_tasks.Count} existing tasks from queue";
+                if (resetTasksCount > 0)
+                {
+                    statusMessage += $" (reset {resetTasksCount} interrupted tasks)";
+                }
+                
+                UpdateStatus(statusMessage);
             }
         }
         catch (Exception ex)
@@ -440,6 +419,114 @@ public sealed partial class MainPage : Page
             _logger.LogError(ex, "LoadExistingTasks error");
         }
     }
+
+    // Button click handlers
+    private async void StartQueueButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_queueManager != null)
+        {
+            await _queueManager.StartProcessingAsync();
+            UpdateStatus("Queue processing started");
+        }
+    }
+
+    private void PauseQueueButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_queueManager != null)
+        {
+            _queueManager.PauseProcessing();
+            UpdateStatus("Queue processing paused");
+        }
+    }
+
+    private void CancelCurrentButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_queueManager != null)
+        {
+            _queueManager.StopProcessing();
+            UpdateStatus("Queue processing stopped");
+        }
+    }
+
+    private async void ClearDoneButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_queueManager != null)
+        {
+            await _queueManager.ClearCompletedTasksAsync();
+            
+            var completedTasks = _tasks.Where(t => t.Status == "Done").ToList();
+            foreach (var task in completedTasks)
+            {
+                _tasks.Remove(task);
+            }
+            
+            UpdateStatus("Cleared completed tasks");
+        }
+    }
+
+    private async void DeleteQueueButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_queueManager != null)
+        {
+            // Show confirmation dialog since this is a destructive operation
+            try
+            {
+                var confirmDialog = new ContentDialog
+                {
+                    Title = "Delete Queue",
+                    Content = "Are you sure you want to delete all tasks from the queue?\n\nThis action cannot be undone.",
+                    PrimaryButtonText = "Delete All",
+                    CloseButtonText = "Cancel",
+                    DefaultButton = ContentDialogButton.Close,
+                    XamlRoot = XamlRoot
+                };
+
+                var result = await confirmDialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                {
+                    await _queueManager.ClearAllTasksAsync();
+                    
+                    // Clear the UI task list
+                    _tasks.Clear();
+                    
+                    UpdateStatus("All tasks deleted from queue");
+                    _logger.LogInformation("User deleted all tasks from queue");
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = $"Failed to delete queue: {ex.Message}";
+                UpdateStatus(errorMessage);
+                _logger.LogError(ex, "DeleteQueueButton_Click error");
+                
+                await ShowErrorDialogAsync("Delete Queue Error", 
+                    $"An error occurred while deleting the queue:\n\n{ex.Message}");
+            }
+        }
+    }
+
+    private async void SaveQueueButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_queueManager != null)
+        {
+            await _queueManager.SaveQueueAsync();
+            var queuePath = Path.Combine(Directory.GetCurrentDirectory(), "shared", "TranscriptionQueue.json");
+            _settingsService.UpdateLastQueuePath(queuePath);
+            UpdateStatus("Queue saved");
+        }
+    }
+
+    private void LoadQueueButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_queueManager != null)
+        {
+            _queueManager.LoadQueue();
+            LoadExistingTasks();
+            UpdateStatus("Queue loaded");
+        }
+    }
+
+    // Add missing event handlers that are referenced in XAML
 
     private async void AddFilesButton_Click(object sender, RoutedEventArgs e)
     {
@@ -482,12 +569,12 @@ public sealed partial class MainPage : Page
     {
         try
         {
-            var picker = new FolderPicker();
-            picker.ViewMode = PickerViewMode.Thumbnail; // Better for seeing file contents
-            picker.SuggestedStartLocation = PickerLocationId.MusicLibrary; // More appropriate for audio files
-            
-            // FolderPicker requires at least one file type filter in WinUI 3
-            // Add the supported audio/video formats to help with filtering
+            var picker = new FolderPicker
+            {
+                ViewMode = PickerViewMode.Thumbnail,
+                SuggestedStartLocation = PickerLocationId.MusicLibrary
+            };
+
             picker.FileTypeFilter.Add(".mp3");
             picker.FileTypeFilter.Add(".wav");
             picker.FileTypeFilter.Add(".mp4");
@@ -498,7 +585,7 @@ public sealed partial class MainPage : Page
             picker.FileTypeFilter.Add(".ogg");
             picker.FileTypeFilter.Add(".webm");
             picker.FileTypeFilter.Add(".wma");
-            picker.FileTypeFilter.Add("*"); // Fallback for all files
+            picker.FileTypeFilter.Add("*");
 
             var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
             InitializeWithWindow.Initialize(picker, hwnd);
@@ -533,7 +620,6 @@ public sealed partial class MainPage : Page
 
             var selectedModel = ModelComboBox.SelectedValue?.ToString() ?? "ggml-base.bin";
             var selectedLanguage = (LanguageComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "auto";
-            var outputDirectory = OutputDirectoryTextBox.Text;
 
             int added = 0;
             int failed = 0;
@@ -609,77 +695,11 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private async void StartQueueButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_queueManager != null)
-        {
-            await _queueManager.StartProcessingAsync();
-            UpdateStatus("Queue processing started");
-        }
-    }
-
-    private void PauseQueueButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_queueManager != null)
-        {
-            _queueManager.PauseProcessing();
-            UpdateStatus("Queue processing paused");
-        }
-    }
-
-    private void CancelCurrentButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_queueManager != null)
-        {
-            _queueManager.StopProcessing();
-            UpdateStatus("Queue processing stopped");
-        }
-    }
-
-    private async void ClearDoneButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_queueManager != null)
-        {
-            await _queueManager.ClearCompletedTasksAsync();
-            
-            var completedTasks = _tasks.Where(t => t.Status == "Done").ToList();
-            foreach (var task in completedTasks)
-            {
-                _tasks.Remove(task);
-            }
-            
-            UpdateStatus("Cleared completed tasks");
-        }
-    }
-
-    private async void SaveQueueButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_queueManager != null)
-        {
-            await _queueManager.SaveQueueAsync();
-            var queuePath = Path.Combine(Directory.GetCurrentDirectory(), "shared", "TranscriptionQueue.json");
-            _settingsService.UpdateLastQueuePath(queuePath);
-            UpdateStatus("Queue saved");
-        }
-    }
-
-    private void LoadQueueButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_queueManager != null)
-        {
-            _queueManager.LoadQueue();
-            LoadExistingTasks();
-            UpdateStatus("Queue loaded");
-        }
-    }
-
     private async void BrowseOutputButton_Click(object sender, RoutedEventArgs e)
     {
         var picker = new FolderPicker();
-        picker.ViewMode = PickerViewMode.List; // List view is fine for output directory selection
+        picker.ViewMode = PickerViewMode.List;
         picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
-        
-        // FolderPicker requires at least one file type filter in WinUI 3
         picker.FileTypeFilter.Add("*");
 
         var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
@@ -703,7 +723,6 @@ public sealed partial class MainPage : Page
 
     private void RecursiveCheckBox_Changed(object sender, RoutedEventArgs e)
     {
-        // Only update settings after initialization is complete
         if (sender is CheckBox checkBox && _isInitialized)
         {
             _settingsService.UpdateRecursive(checkBox.IsChecked == true);
@@ -728,6 +747,38 @@ public sealed partial class MainPage : Page
             
             // Reinitialize queue manager with new GPU setting
             ReinitializeQueueManager();
+        }
+    }
+
+    private void ReinitializeQueueManager()
+    {
+        try
+        {
+            // Dispose existing queue manager
+            if (_queueManager != null)
+            {
+                _queueManager.StatusChanged -= OnQueueStatusChanged;
+                _queueManager.TaskCompleted -= OnTaskCompleted;
+                _queueManager.TaskFailed -= OnTaskFailed;
+                _queueManager.ProgressChanged -= OnQueueProgressChanged;
+                _queueManager.Dispose();
+            }
+            
+            // Create new queue manager with updated GPU setting and logger
+            InitializeQueueManager();
+            
+            UpdateStatus($"Acceleration updated to: {(_settingsService.Settings.UseGpu ? "GPU" : "CPU")}");
+            _logger.LogInformation("QueueManager reinitialized with GPU setting: {UseGpu}", _settingsService.Settings.UseGpu);
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = $"Failed to reinitialize queue manager: {ex.Message}";
+            UpdateStatus(errorMessage);
+            _logger.LogError(ex, "QueueManager reinitialization error");
+            
+            // Show error dialog asynchronously
+            _ = ShowErrorDialogAsync("Queue Manager Error", 
+                $"Failed to update queue manager settings:\n\n{ex.Message}\n\nThe previous settings will remain active.");
         }
     }
 
@@ -794,39 +845,9 @@ public sealed partial class MainPage : Page
                         },
                         new TextBlock
                         {
-                            Text = "• Batch transcription with queue management\n• Multiple audio/video format support\n• Real-time progress tracking\n• Automatic queue persistence\n• Keyboard shortcuts and context menus\n• Settings persistence",
+                            Text = "• Batch transcription with queue management\n• Multiple audio/video format support\n• Real-time progress tracking\n• Automatic queue persistence\n• Complete queue management (clear, delete all)\n• Keyboard shortcuts and context menus\n• Settings persistence",
                             TextWrapping = TextWrapping.Wrap,
                             Margin = new Thickness(16, 0, 0, 8)
-                        },
-                        new TextBlock
-                        {
-                            Text = "Supported Formats:",
-                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                            Margin = new Thickness(0, 8, 0, 4)
-                        },
-                        new TextBlock
-                        {
-                            Text = "MP3, WAV, MP4, AVI, MKV, M4A, FLAC, OGG, WEBM, WMA",
-                            TextWrapping = TextWrapping.Wrap,
-                            Margin = new Thickness(16, 0, 0, 8)
-                        },
-                        new TextBlock
-                        {
-                            Text = "Requirements:",
-                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                            Margin = new Thickness(0, 8, 0, 4)
-                        },
-                        new TextBlock
-                        {
-                            Text = "• Windows 10 version 1903 or later\n• .NET 8.0 Runtime\n• FFmpeg (for audio processing)\n• Whisper model files in whispermodels/ folder",
-                            TextWrapping = TextWrapping.Wrap,
-                            Margin = new Thickness(16, 0, 0, 8)
-                        },
-                        new TextBlock
-                        {
-                            Text = "🤖 Generated with Claude Code",
-                            HorizontalAlignment = HorizontalAlignment.Center,
-                            Margin = new Thickness(0, 12, 0, 0)
                         }
                     }
                 }
@@ -838,6 +859,7 @@ public sealed partial class MainPage : Page
         await aboutDialog.ShowAsync();
     }
 
+    // Event handlers for queue manager
     private void OnQueueStatusChanged(object? sender, Core.Events.TranscriptionStatusEventArgs e)
     {
         DispatcherQueue.TryEnqueue(() =>
@@ -859,13 +881,11 @@ public sealed partial class MainPage : Page
             UpdateStatus($"Task completed: {Path.GetFileName(e.FilePath)}");
             UpdateQueueProgress();
             
-            // Show system tray notification
             _systemTrayService.ShowNotification(
                 "Transcription Complete", 
                 $"Finished transcribing {Path.GetFileName(e.FilePath)}",
                 NotificationSeverity.Success);
                 
-            // Open output if enabled
             if (_settingsService.Settings.OpenOutputAfterCompletion && !string.IsNullOrEmpty(e.OutputPath))
             {
                 _ = OpenOutputFileAsync(e.OutputPath);
@@ -880,7 +900,6 @@ public sealed partial class MainPage : Page
             UpdateStatus($"Task failed: {Path.GetFileName(e.FilePath)} - {e.ErrorMessage}");
             UpdateQueueProgress();
             
-            // Show system tray notification
             _systemTrayService.ShowNotification(
                 "Transcription Failed", 
                 $"Failed to transcribe {Path.GetFileName(e.FilePath)}: {e.ErrorMessage}",
@@ -892,15 +911,14 @@ public sealed partial class MainPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            // Find the currently processing task and update its progress
             var processingTask = _tasks.FirstOrDefault(t => t.Status == "Processing");
             if (processingTask != null)
             {
-                processingTask.Progress = e.Progress * 100; // Convert to percentage
+                // Ensure progress is between 0 and 100, rounded to max 2 decimal places
+                processingTask.Progress = Math.Round(Math.Max(0, Math.Min(100, e.Progress * 100)), 2);
                 
-                // Update status with processing speed and ETA if available
                 var fileName = Path.GetFileName(processingTask.FilePath);
-                var statusMessage = $"Processing: {fileName} ({processingTask.Progress:F1}%)";
+                var statusMessage = $"Processing: {fileName} ({processingTask.Progress:F2}%)";
                 
                 if (e.ProcessingSpeed > 0)
                 {
@@ -918,9 +936,67 @@ public sealed partial class MainPage : Page
                         statusMessage += $" • ETA: {eta.Seconds}s";
                 }
                 
+                // Calculate and add total queue ETA
+                var totalEta = CalculateTotalQueueEta(e);
+                if (totalEta.TotalSeconds > 0)
+                {
+                    if (totalEta.TotalHours >= 1)
+                        statusMessage += $" ({totalEta.Hours}h {totalEta.Minutes}m total)";
+                    else if (totalEta.TotalMinutes >= 1)
+                        statusMessage += $" ({totalEta.Minutes}m {totalEta.Seconds}s total)";
+                    else
+                        statusMessage += $" ({totalEta.Seconds}s total)";
+                }
+                
                 UpdateStatus(statusMessage);
+                
+                _logger.LogTrace("Progress update: {FileName} at {Progress:F2}% (raw: {RawProgress:F3})", 
+                    fileName, processingTask.Progress, e.Progress);
             }
         });
+    }
+
+    private TimeSpan CalculateTotalQueueEta(Core.Events.TranscriptionProgressEventArgs currentProgress)
+    {
+        if (_queueManager == null || currentProgress.ProcessingSpeed <= 0)
+            return TimeSpan.Zero;
+
+        try
+        {
+            var pendingTasks = _queueManager.Queue.Tasks.Where(t => t.Status == Core.Models.TaskStatus.Pending).ToList();
+            var processingTask = _queueManager.Queue.Tasks.FirstOrDefault(t => t.Status == Core.Models.TaskStatus.Processing);
+            
+            double totalRemainingSeconds = 0;
+            
+            // Add remaining time for current task
+            if (processingTask != null && currentProgress.EstimatedTimeRemaining.TotalSeconds > 0)
+            {
+                totalRemainingSeconds += currentProgress.EstimatedTimeRemaining.TotalSeconds;
+            }
+            
+            // Estimate time for pending tasks based on current processing speed
+            foreach (var task in pendingTasks)
+            {
+                if (TimeSpan.TryParse(task.Duration, out var duration))
+                {
+                    // Use current processing speed to estimate time needed for each pending task
+                    var estimatedProcessingTime = duration.TotalSeconds / Math.Max(0.1, currentProgress.ProcessingSpeed);
+                    totalRemainingSeconds += estimatedProcessingTime;
+                }
+                else
+                {
+                    // Fallback: assume 5 minutes per task if duration parsing fails
+                    totalRemainingSeconds += 300; // 5 minutes
+                }
+            }
+            
+            return TimeSpan.FromSeconds(totalRemainingSeconds);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to calculate total queue ETA");
+            return TimeSpan.Zero;
+        }
     }
 
     private void UpdateQueueProgress()
@@ -961,7 +1037,6 @@ public sealed partial class MainPage : Page
             {
                 UpdateStatus($"Queue complete • {completedTasks} completed, {failedTasks} failed");
                 
-                // Show queue completion notification
                 if (completedTasks > 0 || failedTasks > 0)
                 {
                     _systemTrayService.ShowNotification(
@@ -985,9 +1060,8 @@ public sealed partial class MainPage : Page
         var item = (e.OriginalSource as FrameworkElement)?.DataContext as TaskViewModel;
         if (item != null)
         {
-            listView.SelectedItem = item;
+            listView!.SelectedItem = item;
             
-            // Update menu item visibility based on task status
             RetryTaskMenuItem.IsEnabled = item.Status == "Error";
             OpenOutputMenuItem.IsEnabled = !string.IsNullOrEmpty(item.OutputPath) && File.Exists(item.OutputPath);
             OpenFolderMenuItem.IsEnabled = !string.IsNullOrEmpty(item.OutputPath) && File.Exists(item.OutputPath);
@@ -1090,7 +1164,7 @@ public sealed partial class MainPage : Page
                            $"Model: {selectedTask.ModelName}\n" +
                            $"Language: {selectedTask.Language}\n" +
                            $"Status: {selectedTask.Status}\n" +
-                           $"Progress: {selectedTask.Progress:F1}%";
+                           $"Progress: {selectedTask.Progress:F2}%";
             
             if (!string.IsNullOrEmpty(selectedTask.ErrorMessage))
             {
@@ -1171,6 +1245,12 @@ public sealed partial class MainPage : Page
         {
             RemoveTaskMenuItem_Click(null!, null!);
         }
+        args.Handled = true;
+    }
+
+    private void DeleteQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        DeleteQueueButton_Click(null!, null!);
         args.Handled = true;
     }
 
@@ -1266,9 +1346,9 @@ public sealed partial class MainPage : Page
         }
     }
 
+    // System tray and window management
     private void InitializeSystemTray()
     {
-        // Simplified system tray initialization
         _systemTrayService.ShowWindowRequested += OnSystemTrayShowWindow;
         _systemTrayService.HideWindowRequested += OnSystemTrayHideWindow;
     }
@@ -1288,12 +1368,6 @@ public sealed partial class MainPage : Page
             App.MainWindow.AppWindow.Hide();
         });
     }
-
-    private void ShowSettingsPage()
-    {
-        UpdateStatus("Settings page not yet implemented");
-    }
-
 
     public void HandleMinimizeToTray()
     {

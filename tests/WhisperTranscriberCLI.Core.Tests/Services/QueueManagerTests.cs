@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 using Moq;
@@ -131,7 +132,7 @@ public class QueueManagerTests : IDisposable
               "modelName": "ggml-base.bin",
               "language": "auto",
               "duration": "00:05:30",
-              "status": "pending",
+              "status": 0,
               "addedAt": "2025-01-17T10:30:00Z",
               "completedAt": null,
               "outputPath": null,
@@ -186,6 +187,103 @@ public class QueueManagerTests : IDisposable
         // Assert - This would require exposing internal state or using reflection
         // For now, we verify it doesn't throw
         Assert.True(true);
+    }
+
+    [Fact]
+    public void LoadQueue_ProcessingTasksExist_ResetsToePending()
+    {
+        // Arrange
+        var queueData = """
+        {
+          "schemaVersion": 1,
+          "tasks": [
+            {
+              "id": "pending-task",
+              "filePath": "pending.mp3",
+              "modelName": "ggml-base.bin",
+              "language": "auto",
+              "duration": "00:03:00",
+              "status": 0,
+              "addedAt": "2025-01-17T10:30:00Z",
+              "completedAt": null,
+              "outputPath": null,
+              "errorMessage": null,
+              "progress": 0.0
+            },
+            {
+              "id": "processing-task",
+              "filePath": "processing.mp3",
+              "modelName": "ggml-base.bin",
+              "language": "auto",
+              "duration": "00:05:30",
+              "status": 1,
+              "addedAt": "2025-01-17T10:30:00Z",
+              "completedAt": null,
+              "outputPath": null,
+              "errorMessage": null,
+              "progress": 45.5
+            },
+            {
+              "id": "done-task",
+              "filePath": "done.mp3",
+              "modelName": "ggml-base.bin",
+              "language": "auto",
+              "duration": "00:02:15",
+              "status": 2,
+              "addedAt": "2025-01-17T10:30:00Z",
+              "completedAt": "2025-01-17T10:35:00Z",
+              "outputPath": "done.srt",
+              "errorMessage": null,
+              "progress": 100.0
+            }
+          ]
+        }
+        """;
+        File.WriteAllText(_testQueuePath, queueData);
+
+        // Act
+        _queueManager.LoadQueue();
+
+        // Assert
+        Assert.Equal(3, _queueManager.Queue.Tasks.Count);
+        
+        // Check that the processing task was reset to pending
+        var processingTask = _queueManager.Queue.Tasks.FirstOrDefault(t => t.Id == "processing-task");
+        Assert.NotNull(processingTask);
+        Assert.Equal(TaskStatus.Pending, processingTask.Status);
+        Assert.Equal(0.0, processingTask.Progress); // Progress reset
+        Assert.Null(processingTask.ErrorMessage); // Error message cleared
+        
+        // Check that other tasks remain unchanged
+        var pendingTask = _queueManager.Queue.Tasks.FirstOrDefault(t => t.Id == "pending-task");
+        Assert.NotNull(pendingTask);
+        Assert.Equal(TaskStatus.Pending, pendingTask.Status);
+        
+        var doneTask = _queueManager.Queue.Tasks.FirstOrDefault(t => t.Id == "done-task");
+        Assert.NotNull(doneTask);
+        Assert.Equal(TaskStatus.Done, doneTask.Status);
+        Assert.Equal(100.0, doneTask.Progress); // Progress preserved for completed task
+    }
+
+    [Fact]
+    public async Task ClearAllTasksAsync_MixedStatuses_RemovesAllTasks()
+    {
+        // Arrange
+        var pendingTask = new TranscriptionTask { Status = TaskStatus.Pending };
+        var processingTask = new TranscriptionTask { Status = TaskStatus.Processing };
+        var doneTask = new TranscriptionTask { Status = TaskStatus.Done };
+        var errorTask = new TranscriptionTask { Status = TaskStatus.Error };
+
+        await _queueManager.AddTaskAsync(pendingTask);
+        await _queueManager.AddTaskAsync(processingTask);
+        await _queueManager.AddTaskAsync(doneTask);
+        await _queueManager.AddTaskAsync(errorTask);
+
+        // Act
+        await _queueManager.ClearAllTasksAsync();
+
+        // Assert
+        Assert.Empty(_queueManager.Queue.Tasks);
     }
 
     public void Dispose()

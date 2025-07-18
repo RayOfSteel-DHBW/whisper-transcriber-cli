@@ -24,6 +24,7 @@
             <KeyboardAccelerator Key="Pause" Invoked="PauseQueue_Invoked"/>
             <KeyboardAccelerator Key="Escape" Invoked="CancelQueue_Invoked"/>
             <KeyboardAccelerator Key="Delete" Invoked="DeleteTask_Invoked"/>
+            <KeyboardAccelerator Key="Delete" Modifiers="Control,Shift" Invoked="DeleteQueue_Invoked"/>
             <KeyboardAccelerator Key="F1" Invoked="ShowHelp_Invoked"/>
         </Grid.KeyboardAccelerators>
         <Grid.RowDefinitions>
@@ -115,12 +116,12 @@
             <ListView.Header>
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="280"/>
+                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="140"/>
                         <ColumnDefinition Width="80"/>
-                        <ColumnDefinition Width="100"/>
-                        <ColumnDefinition Width="60"/>
-                        <ColumnDefinition Width="100"/>
                         <ColumnDefinition Width="120"/>
+                        <ColumnDefinition Width="150"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="File" FontWeight="SemiBold" Margin="8,4"/>
                     <TextBlock Grid.Column="1" Text="Duration" FontWeight="SemiBold" Margin="8,4"/>
@@ -134,19 +135,23 @@
                 <DataTemplate>
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="280"/>
+                            <ColumnDefinition Width="100"/>
+                            <ColumnDefinition Width="140"/>
                             <ColumnDefinition Width="80"/>
-                            <ColumnDefinition Width="100"/>
-                            <ColumnDefinition Width="60"/>
-                            <ColumnDefinition Width="100"/>
                             <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="150"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{Binding FileName}" Margin="8,4" TextTrimming="CharacterEllipsis"/>
                         <TextBlock Grid.Column="1" Text="{Binding Duration}" Margin="8,4"/>
                         <TextBlock Grid.Column="2" Text="{Binding ModelName}" Margin="8,4"/>
                         <TextBlock Grid.Column="3" Text="{Binding Language}" Margin="8,4"/>
                         <TextBlock Grid.Column="4" Text="{Binding Status}" Margin="8,4"/>
-                        <ProgressBar Grid.Column="5" Value="{Binding Progress}" Maximum="100" Width="100" Margin="8,4"/>
+                        <StackPanel Grid.Column="5" Orientation="Horizontal" Margin="8,4">
+                            <ProgressBar Value="{Binding Progress}" Maximum="100" Width="100" Margin="0,0,4,0"/>
+                            <TextBlock Text="{Binding Progress}" VerticalAlignment="Center" FontSize="11" Width="35" TextAlignment="Right"/>
+                            <TextBlock Text="%" VerticalAlignment="Center" FontSize="11" Width="10"/>
+                        </StackPanel>
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
@@ -164,6 +169,7 @@
                 <Button x:Name="PauseQueueButton" Content="⏸ Pause" Click="PauseQueueButton_Click" ToolTipService.ToolTip="Pause Queue (Pause)"/>
                 <Button x:Name="CancelCurrentButton" Content="⏹ Cancel Current" Click="CancelCurrentButton_Click" ToolTipService.ToolTip="Cancel Queue (Esc)"/>
                 <Button x:Name="ClearDoneButton" Content="🗑 Clear Done" Click="ClearDoneButton_Click" ToolTipService.ToolTip="Clear Completed Tasks"/>
+                <Button x:Name="DeleteQueueButton" Content="❌ Delete Queue" Click="DeleteQueueButton_Click" ToolTipService.ToolTip="Delete All Tasks (Ctrl+Shift+Delete)"/>
             </StackPanel>
             
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
