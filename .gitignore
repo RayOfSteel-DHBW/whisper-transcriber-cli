@@ -399,3 +399,5 @@ appsettings.json
 appsettings.local.json
 *.sqlite
 *.db
+**/deploy/
+/.claude/*
