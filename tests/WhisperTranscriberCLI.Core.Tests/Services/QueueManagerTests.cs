@@ -339,6 +339,92 @@ public class QueueManagerTests : IDisposable
         Assert.Equal(0.0, errorTask2.Progress);
     }
 
+    [Fact]
+    public async Task GetNextPendingTaskAsync_InterruptedTaskExists_PrioritizesInterruptedTask()
+    {
+        // Arrange - Create tasks with different scenarios
+        var freshTask = new TranscriptionTask 
+        { 
+            Id = "fresh-task",
+            FilePath = "fresh.mp3",
+            Status = TaskStatus.Pending, 
+            AddedAt = DateTime.UtcNow.AddMinutes(-10),
+            LastStartedAt = null // Never started
+        };
+        
+        var interruptedTask = new TranscriptionTask 
+        { 
+            Id = "interrupted-task",
+            FilePath = "interrupted.mp3", 
+            Status = TaskStatus.Pending, 
+            AddedAt = DateTime.UtcNow.AddMinutes(-5),
+            LastStartedAt = DateTime.UtcNow.AddMinutes(-2) // Was started but interrupted
+        };
+        
+        var olderFreshTask = new TranscriptionTask 
+        { 
+            Id = "older-fresh-task",
+            FilePath = "older.mp3",
+            Status = TaskStatus.Pending, 
+            AddedAt = DateTime.UtcNow.AddMinutes(-15),
+            LastStartedAt = null // Never started but older than others
+        };
+
+        // Add tasks in order: older fresh, fresh, interrupted
+        await _queueManager.AddTaskAsync(olderFreshTask);
+        await _queueManager.AddTaskAsync(freshTask);
+        await _queueManager.AddTaskAsync(interruptedTask);
+
+        // Act - Use reflection to call the private GetNextPendingTaskAsync method
+        var method = typeof(QueueManager).GetMethod("GetNextPendingTaskAsync", 
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var nextTaskTask = (Task<TranscriptionTask?>)method.Invoke(_queueManager, null);
+        var nextTask = await nextTaskTask;
+
+        // Assert - Should prioritize the interrupted task over fresh tasks
+        Assert.NotNull(nextTask);
+        Assert.Equal("interrupted-task", nextTask.Id);
+        Assert.Equal("interrupted.mp3", nextTask.FilePath);
+    }
+
+    [Fact]
+    public async Task GetNextPendingTaskAsync_OnlyFreshTasks_SelectsOldestFirst()
+    {
+        // Arrange - Create only fresh tasks (no LastStartedAt)
+        var newerTask = new TranscriptionTask 
+        { 
+            Id = "newer-task",
+            FilePath = "newer.mp3",
+            Status = TaskStatus.Pending, 
+            AddedAt = DateTime.UtcNow.AddMinutes(-5),
+            LastStartedAt = null
+        };
+        
+        var olderTask = new TranscriptionTask 
+        { 
+            Id = "older-task",
+            FilePath = "older.mp3", 
+            Status = TaskStatus.Pending, 
+            AddedAt = DateTime.UtcNow.AddMinutes(-10),
+            LastStartedAt = null
+        };
+
+        // Add tasks in reverse chronological order
+        await _queueManager.AddTaskAsync(newerTask);
+        await _queueManager.AddTaskAsync(olderTask);
+
+        // Act - Use reflection to call the private GetNextPendingTaskAsync method
+        var method = typeof(QueueManager).GetMethod("GetNextPendingTaskAsync", 
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var nextTaskTask = (Task<TranscriptionTask?>)method.Invoke(_queueManager, null);
+        var nextTask = await nextTaskTask;
+
+        // Assert - Should select the older task first (normal queue behavior)
+        Assert.NotNull(nextTask);
+        Assert.Equal("older-task", nextTask.Id);
+        Assert.Equal("older.mp3", nextTask.FilePath);
+    }
+
     public void Dispose()
     {
         if (File.Exists(_testQueuePath))

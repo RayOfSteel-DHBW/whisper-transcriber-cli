@@ -217,7 +217,34 @@ public class QueueManager : IDisposable
         await _queueSemaphore.WaitAsync();
         try
         {
-            return _queue.Tasks.FirstOrDefault(t => t.Status == Models.TaskStatus.Pending);
+            var pendingTasks = _queue.Tasks.Where(t => t.Status == Models.TaskStatus.Pending).ToList();
+            if (!pendingTasks.Any())
+                return null;
+
+            // Smart task selection: prioritize tasks that were interrupted
+            // 1. First priority: Tasks that were started but interrupted (have LastStartedAt but still pending)
+            // 2. Second priority: Tasks that were never started (no LastStartedAt) in AddedAt order
+            
+            var interruptedTasks = pendingTasks.Where(t => t.LastStartedAt.HasValue).ToList();
+            
+            TranscriptionTask selectedTask;
+            
+            if (interruptedTasks.Any())
+            {
+                // Prioritize the most recently interrupted task
+                selectedTask = interruptedTasks.OrderByDescending(t => t.LastStartedAt).First();
+                _logger?.LogDebug("Selected interrupted task for processing: {TaskId} - {FilePath} (Last started: {LastStartedAt})", 
+                    selectedTask.Id, selectedTask.FilePath, selectedTask.LastStartedAt);
+            }
+            else
+            {
+                // No interrupted tasks, pick the oldest never-started task
+                selectedTask = pendingTasks.OrderBy(t => t.AddedAt).First();
+                _logger?.LogDebug("Selected new task for processing: {TaskId} - {FilePath} (Added: {AddedAt})", 
+                    selectedTask.Id, selectedTask.FilePath, selectedTask.AddedAt);
+            }
+            
+            return selectedTask;
         }
         finally
         {
@@ -230,6 +257,10 @@ public class QueueManager : IDisposable
         try
         {
             _logger?.LogInformation("Starting transcription for task {TaskId}: {FilePath}", task.Id, task.FilePath);
+            
+            // Set the last started time to track when this task was last attempted
+            task.LastStartedAt = DateTime.UtcNow;
+            
             await UpdateTaskStatusAsync(task, Models.TaskStatus.Processing);
 
             // Update status to show we're starting
@@ -405,6 +436,7 @@ public class QueueManager : IDisposable
             task.Progress = 0; // Reset progress
             task.CompletedAt = null; // Clear completion time
             task.OutputPath = null; // Clear output path
+            // Keep LastStartedAt so we can prioritize this interrupted task
             
             await UpdateTaskStatusAsync(task, Models.TaskStatus.Pending);
             
@@ -561,6 +593,8 @@ public class QueueManager : IDisposable
                 task.Progress = 0;
                 task.CompletedAt = null;
                 task.OutputPath = null;
+                // Clear LastStartedAt so reset error tasks don't get priority over truly interrupted tasks
+                task.LastStartedAt = null;
             }
             
             if (errorTasks.Count > 0)

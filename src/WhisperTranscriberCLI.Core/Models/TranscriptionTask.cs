@@ -28,6 +28,9 @@ public class TranscriptionTask
     [JsonPropertyName("completedAt")]
     public DateTime? CompletedAt { get; set; }
 
+    [JsonPropertyName("lastStartedAt")]
+    public DateTime? LastStartedAt { get; set; }
+
     [JsonPropertyName("outputPath")]
     public string? OutputPath { get; set; }
 

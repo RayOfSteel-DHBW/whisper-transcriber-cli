@@ -116,42 +116,42 @@
             <ListView.Header>
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="280"/>
+                        <ColumnDefinition Width="*" MinWidth="200"/>
+                        <ColumnDefinition Width="90"/>
                         <ColumnDefinition Width="100"/>
-                        <ColumnDefinition Width="140"/>
-                        <ColumnDefinition Width="80"/>
-                        <ColumnDefinition Width="120"/>
-                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="160"/>
+                        <ColumnDefinition Width="50"/>
+                        <ColumnDefinition Width="180"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="File" FontWeight="SemiBold" Margin="8,4"/>
                     <TextBlock Grid.Column="1" Text="Duration" FontWeight="SemiBold" Margin="8,4"/>
-                    <TextBlock Grid.Column="2" Text="Model" FontWeight="SemiBold" Margin="8,4"/>
-                    <TextBlock Grid.Column="3" Text="Lang" FontWeight="SemiBold" Margin="8,4"/>
-                    <TextBlock Grid.Column="4" Text="Status" FontWeight="SemiBold" Margin="8,4"/>
-                    <TextBlock Grid.Column="5" Text="Progress" FontWeight="SemiBold" Margin="8,4"/>
+                    <TextBlock Grid.Column="2" Text="Status" FontWeight="SemiBold" Margin="8,4"/>
+                    <TextBlock Grid.Column="3" Text="Progress" FontWeight="SemiBold" Margin="8,4"/>
+                    <TextBlock Grid.Column="4" Text="Lang" FontWeight="SemiBold" Margin="8,4"/>
+                    <TextBlock Grid.Column="5" Text="Model" FontWeight="SemiBold" Margin="8,4"/>
                 </Grid>
             </ListView.Header>
             <ListView.ItemTemplate>
                 <DataTemplate>
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="280"/>
+                            <ColumnDefinition Width="*" MinWidth="200"/>
+                            <ColumnDefinition Width="90"/>
                             <ColumnDefinition Width="100"/>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="80"/>
-                            <ColumnDefinition Width="120"/>
-                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="160"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="180"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{Binding FileName}" Margin="8,4" TextTrimming="CharacterEllipsis"/>
                         <TextBlock Grid.Column="1" Text="{Binding Duration}" Margin="8,4"/>
-                        <TextBlock Grid.Column="2" Text="{Binding ModelName}" Margin="8,4"/>
-                        <TextBlock Grid.Column="3" Text="{Binding Language}" Margin="8,4"/>
-                        <TextBlock Grid.Column="4" Text="{Binding Status}" Margin="8,4"/>
-                        <StackPanel Grid.Column="5" Orientation="Horizontal" Margin="8,4">
-                            <ProgressBar Value="{Binding Progress}" Maximum="100" Width="100" Margin="0,0,4,0"/>
-                            <TextBlock Text="{Binding Progress}" VerticalAlignment="Center" FontSize="11" Width="35" TextAlignment="Right"/>
-                            <TextBlock Text="%" VerticalAlignment="Center" FontSize="11" Width="10"/>
+                        <TextBlock Grid.Column="2" Text="{Binding Status}" Margin="8,4"/>
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="8,4">
+                            <TextBlock Text="{Binding Progress}" VerticalAlignment="Center" FontSize="11" Width="30" TextAlignment="Right" Margin="0,0,2,0"/>
+                            <TextBlock Text="%" VerticalAlignment="Center" FontSize="11" Width="12" Margin="0,0,4,0"/>
+                            <ProgressBar Value="{Binding Progress}" Maximum="100" Width="100"/>
                         </StackPanel>
+                        <TextBlock Grid.Column="4" Text="{Binding Language}" Margin="8,4" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="5" Text="{Binding ModelName}" Margin="8,4" TextTrimming="CharacterEllipsis"/>
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
