@@ -21,8 +21,8 @@
             <KeyboardAccelerator Key="S" Modifiers="Control" Invoked="SaveQueue_Invoked"/>
             <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="LoadQueue_Invoked"/>
             <KeyboardAccelerator Key="F5" Invoked="StartQueue_Invoked"/>
-            <KeyboardAccelerator Key="Pause" Invoked="PauseQueue_Invoked"/>
-            <KeyboardAccelerator Key="Escape" Invoked="CancelQueue_Invoked"/>
+            <KeyboardAccelerator Key="Escape" Invoked="StopQueue_Invoked"/>
+            <KeyboardAccelerator Key="R" Modifiers="Control" Invoked="ResetErrors_Invoked"/>
             <KeyboardAccelerator Key="Delete" Invoked="DeleteTask_Invoked"/>
             <KeyboardAccelerator Key="Delete" Modifiers="Control,Shift" Invoked="DeleteQueue_Invoked"/>
             <KeyboardAccelerator Key="F1" Invoked="ShowHelp_Invoked"/>
@@ -166,8 +166,8 @@
             
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
                 <Button x:Name="StartQueueButton" Content="▶ Start Queue" Click="StartQueueButton_Click" ToolTipService.ToolTip="Start Queue (F5)"/>
-                <Button x:Name="PauseQueueButton" Content="⏸ Pause" Click="PauseQueueButton_Click" ToolTipService.ToolTip="Pause Queue (Pause)"/>
-                <Button x:Name="CancelCurrentButton" Content="⏹ Cancel Current" Click="CancelCurrentButton_Click" ToolTipService.ToolTip="Cancel Queue (Esc)"/>
+                <Button x:Name="StopQueueButton" Content="⏹ Stop" Click="StopQueueButton_Click" ToolTipService.ToolTip="Stop Queue (Esc)"/>
+                <Button x:Name="ResetErrorsButton" Content="🔄 Reset Errors" Click="ResetErrorsButton_Click" ToolTipService.ToolTip="Reset All Failed Tasks to Pending (Ctrl+R)"/>
                 <Button x:Name="ClearDoneButton" Content="🗑 Clear Done" Click="ClearDoneButton_Click" ToolTipService.ToolTip="Clear Completed Tasks"/>
                 <Button x:Name="DeleteQueueButton" Content="❌ Delete Queue" Click="DeleteQueueButton_Click" ToolTipService.ToolTip="Delete All Tasks (Ctrl+Shift+Delete)"/>
             </StackPanel>

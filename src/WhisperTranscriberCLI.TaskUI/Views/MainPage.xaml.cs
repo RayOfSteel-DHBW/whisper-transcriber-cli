@@ -355,7 +355,6 @@ public sealed partial class MainPage : Page
             var queuePath = Path.Combine(Directory.GetCurrentDirectory(), "shared", "TranscriptionQueue.json");
             var mediaConverter = new FfmpegMediaConverter();
             
-            // Create logger specifically for QueueManager to capture transcription errors
             var queueLogger = App.Services?.GetService<ILogger<QueueManager>>();
             _queueManager = new QueueManager(queuePath, mediaConverter, _settingsService.Settings.UseGpu, queueLogger);
             
@@ -363,6 +362,7 @@ public sealed partial class MainPage : Page
             _queueManager.TaskCompleted += OnTaskCompleted;
             _queueManager.TaskFailed += OnTaskFailed;
             _queueManager.ProgressChanged += OnQueueProgressChanged;
+            _queueManager.FileOverwriteRequested += OnFileOverwriteRequested;
             
             LoadExistingTasks();
             UpdateStatus("Queue manager initialized successfully");
@@ -374,7 +374,6 @@ public sealed partial class MainPage : Page
             UpdateStatus(errorMessage);
             _logger.LogError(ex, "QueueManager initialization error");
             
-            // Show error dialog asynchronously
             _ = ShowErrorDialogAsync("Queue Manager Error", 
                 $"Failed to initialize the transcription queue:\n\n{ex.Message}\n\nQueue operations may not work correctly.");
         }
@@ -389,14 +388,28 @@ public sealed partial class MainPage : Page
                 _tasks.Clear();
                 var resetTasksCount = 0;
                 
+                _logger.LogInformation("Loading existing tasks. Initial queue state: {QueueState}", _queueManager.GetQueueState());
+                
                 foreach (var task in _queueManager.Queue.Tasks)
                 {
                     var taskViewModel = new TaskViewModel(task);
                     
-                    // Log if this task was reset from Processing to Pending
+                    // Reset progress to zero for clean slate on app restart
+                    if (task.Status != Core.Models.TaskStatus.Done && task.Status != Core.Models.TaskStatus.Error)
+                    {
+                        var oldProgress = task.Progress;
+                        task.Progress = 0;
+                        taskViewModel.Progress = 0;
+                        
+                        if (oldProgress > 0)
+                        {
+                            _logger.LogDebug("Reset progress for task {TaskId} from {OldProgress} to 0", task.Id, oldProgress);
+                        }
+                    }
+                    
+                    // Log if this task was reset from Processing to Pending (by QueueManager.LoadQueue)
                     if (task.Status == Core.Models.TaskStatus.Pending && task.Progress == 0)
                     {
-                        // This might have been a processing task that was reset
                         resetTasksCount++;
                     }
                     
@@ -410,6 +423,8 @@ public sealed partial class MainPage : Page
                 }
                 
                 UpdateStatus(statusMessage);
+                _logger.LogInformation("LoadExistingTasks completed: {TaskCount} tasks loaded, {ResetCount} reset. Final queue state: {QueueState}", 
+                    _tasks.Count, resetTasksCount, _queueManager.GetQueueState());
             }
         }
         catch (Exception ex)
@@ -420,31 +435,126 @@ public sealed partial class MainPage : Page
         }
     }
 
+    // File overwrite check method for UI interactions
+    public async Task<bool> ShowFileOverwriteDialogAsync(string outputPath)
+    {
+        try
+        {
+            if (XamlRoot == null)
+            {
+                _logger.LogWarning("Cannot show file overwrite dialog - XamlRoot is null");
+                return true; // Default to overwrite if we can't show dialog
+            }
+
+            var confirmDialog = new ContentDialog
+            {
+                Title = "File Already Exists",
+                Content = $"The output file already exists:\n\n{outputPath}\n\nDo you want to overwrite it?",
+                PrimaryButtonText = "Overwrite",
+                SecondaryButtonText = "Skip",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Secondary,
+                XamlRoot = XamlRoot
+            };
+
+            var result = await confirmDialog.ShowAsync();
+            return result == ContentDialogResult.Primary; // true = overwrite, false = skip/cancel
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to show file overwrite dialog");
+            return true; // Default to overwrite if dialog fails
+        }
+    }
+
     // Button click handlers
     private async void StartQueueButton_Click(object sender, RoutedEventArgs e)
     {
         if (_queueManager != null)
         {
-            await _queueManager.StartProcessingAsync();
-            UpdateStatus("Queue processing started");
-        }
-    }
+            try
+            {
+                _logger.LogInformation("Start Queue button clicked. Queue state: {QueueState}", _queueManager.GetQueueState());
+                
+                // Check if there are any error tasks and offer to reset them
+                var errorTasksCount = _queueManager.Queue.Tasks.Count(t => t.Status == Core.Models.TaskStatus.Error);
+                if (errorTasksCount > 0)
+                {
+                    var resetDialog = new ContentDialog
+                    {
+                        Title = "Reset Failed Tasks",
+                        Content = $"There are {errorTasksCount} failed task(s) in the queue.\n\nWould you like to reset them to retry?",
+                        PrimaryButtonText = "Reset & Start",
+                        SecondaryButtonText = "Start Without Reset",
+                        CloseButtonText = "Cancel",
+                        DefaultButton = ContentDialogButton.Primary,
+                        XamlRoot = XamlRoot
+                    };
 
-    private void PauseQueueButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_queueManager != null)
+                    var result = await resetDialog.ShowAsync();
+                    if (result == ContentDialogResult.None) // Cancel
+                    {
+                        return;
+                    }
+                    else if (result == ContentDialogResult.Primary) // Reset & Start
+                    {
+                        await _queueManager.ResetAllErrorTasksAsync();
+                        
+                        // Update UI task list to reflect the reset
+                        var errorTaskViewModels = _tasks.Where(t => t.Status == "Error").ToList();
+                        foreach (var taskViewModel in errorTaskViewModels)
+                        {
+                            taskViewModel.Status = "Pending";
+                            taskViewModel.ErrorMessage = null;
+                            taskViewModel.Progress = 0;
+                        }
+                        
+                        UpdateStatus($"Reset {errorTasksCount} failed tasks and starting queue");
+                        _logger.LogInformation("User chose to reset {ErrorTasksCount} error tasks before starting queue", errorTasksCount);
+                    }
+                    else // Start Without Reset
+                    {
+                        _logger.LogInformation("User chose to start queue without resetting {ErrorTasksCount} error tasks", errorTasksCount);
+                    }
+                }
+                
+                if (!_queueManager.CanStartProcessing())
+                {
+                    var reason = _queueManager.IsProcessing ? "already processing" : "no pending tasks";
+                    UpdateStatus($"Cannot start queue: {reason}");
+                    _logger.LogWarning("Cannot start queue processing: {Reason}", reason);
+                    return;
+                }
+                
+                // Show immediate feedback
+                UpdateStatus("Starting transcription queue...");
+                
+                await _queueManager.StartProcessingAsync();
+                UpdateStatus("Queue processing started");
+                _logger.LogInformation("Queue processing started by user");
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = $"Failed to start queue processing: {ex.Message}";
+                UpdateStatus(errorMessage);
+                _logger.LogError(ex, "StartQueueButton_Click error");
+                await ShowErrorDialogAsync("Start Queue Error", errorMessage);
+            }
+        }
+        else
         {
-            _queueManager.PauseProcessing();
-            UpdateStatus("Queue processing paused");
+            UpdateStatus("Queue manager not available");
+            _logger.LogError("StartQueueButton_Click called but _queueManager is null");
         }
     }
 
-    private void CancelCurrentButton_Click(object sender, RoutedEventArgs e)
+    private void StopQueueButton_Click(object sender, RoutedEventArgs e)
     {
         if (_queueManager != null)
         {
             _queueManager.StopProcessing();
             UpdateStatus("Queue processing stopped");
+            _logger.LogInformation("Queue processing stopped by user");
         }
     }
 
@@ -532,8 +642,11 @@ public sealed partial class MainPage : Page
     {
         try
         {
-            var picker = new FileOpenPicker();
-            picker.ViewMode = PickerViewMode.List;
+            var picker = new FileOpenPicker
+            {
+                ViewMode = PickerViewMode.List
+            };
+
             picker.FileTypeFilter.Add(".mp3");
             picker.FileTypeFilter.Add(".wav");
             picker.FileTypeFilter.Add(".mp4");
@@ -623,6 +736,7 @@ public sealed partial class MainPage : Page
 
             int added = 0;
             int failed = 0;
+            int skipped = 0;
 
             foreach (var filePath in filePaths)
             {
@@ -631,6 +745,19 @@ public sealed partial class MainPage : Page
                     UpdateStatus($"Analyzing {Path.GetFileName(filePath)}...");
                     var duration = await _audioDurationService.GetDurationAsync(filePath);
                     var formattedDuration = _audioDurationService.FormatDuration(duration);
+                    
+                    // Check if output file already exists
+                    var expectedOutputPath = Path.ChangeExtension(filePath, ".srt");
+                    if (File.Exists(expectedOutputPath))
+                    {
+                        var shouldOverwrite = await ShowFileOverwriteDialogAsync(expectedOutputPath);
+                        if (!shouldOverwrite)
+                        {
+                            skipped++;
+                            _logger.LogInformation("User skipped file with existing output: {FilePath} -> {OutputPath}", filePath, expectedOutputPath);
+                            continue;
+                        }
+                    }
                     
                     var task = new TranscriptionTask
                     {
@@ -653,12 +780,14 @@ public sealed partial class MainPage : Page
                 }
             }
 
-            if (added > 0)
-            {
-                UpdateStatus($"Added {added} files to queue" + (failed > 0 ? $" ({failed} failed)" : ""));
-            }
+            var statusParts = new List<string>();
+            if (added > 0) statusParts.Add($"{added} added");
+            if (skipped > 0) statusParts.Add($"{skipped} skipped");
+            if (failed > 0) statusParts.Add($"{failed} failed");
             
-            if (failed > 0 && added == 0)
+            UpdateStatus($"Files processed: {string.Join(", ", statusParts)}");
+            
+            if (failed > 0 && added == 0 && skipped == 0)
             {
                 await ShowErrorDialogAsync("Add Files Error", 
                     $"Failed to add {failed} file(s) to the queue. Check that the files are accessible and in a supported format.");
@@ -754,17 +883,16 @@ public sealed partial class MainPage : Page
     {
         try
         {
-            // Dispose existing queue manager
             if (_queueManager != null)
             {
                 _queueManager.StatusChanged -= OnQueueStatusChanged;
                 _queueManager.TaskCompleted -= OnTaskCompleted;
                 _queueManager.TaskFailed -= OnTaskFailed;
                 _queueManager.ProgressChanged -= OnQueueProgressChanged;
+                _queueManager.FileOverwriteRequested -= OnFileOverwriteRequested;
                 _queueManager.Dispose();
             }
             
-            // Create new queue manager with updated GPU setting and logger
             InitializeQueueManager();
             
             UpdateStatus($"Acceleration updated to: {(_settingsService.Settings.UseGpu ? "GPU" : "CPU")}");
@@ -776,10 +904,41 @@ public sealed partial class MainPage : Page
             UpdateStatus(errorMessage);
             _logger.LogError(ex, "QueueManager reinitialization error");
             
-            // Show error dialog asynchronously
             _ = ShowErrorDialogAsync("Queue Manager Error", 
                 $"Failed to update queue manager settings:\n\n{ex.Message}\n\nThe previous settings will remain active.");
         }
+    }
+
+    // File overwrite event handler for background processing
+    private void OnFileOverwriteRequested(object? sender, Core.Services.FileOverwriteEventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            try
+            {
+                UpdateStatus($"File exists: {Path.GetFileName(e.OutputPath)} - awaiting user decision...");
+                
+                var shouldOverwrite = await ShowFileOverwriteDialogAsync(e.OutputPath);
+                
+                // Update the event args with user decision
+                e.ShouldOverwrite = shouldOverwrite;
+                e.UserDecisionMade = true;
+                
+                var decision = shouldOverwrite ? "overwrite" : "skip";
+                _logger.LogInformation("User chose to {Decision} existing file for task {TaskId}: {OutputPath}", 
+                    decision, e.TaskId, e.OutputPath);
+                
+                UpdateStatus($"User chose to {decision} existing file: {Path.GetFileName(e.OutputPath)}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling file overwrite request for task {TaskId}", e.TaskId);
+                // Default to not overwrite on error
+                e.ShouldOverwrite = false;
+                e.UserDecisionMade = true;
+                UpdateStatus($"Error during file overwrite dialog - defaulting to skip");
+            }
+        });
     }
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -845,7 +1004,7 @@ public sealed partial class MainPage : Page
                         },
                         new TextBlock
                         {
-                            Text = "• Batch transcription with queue management\n• Multiple audio/video format support\n• Real-time progress tracking\n• Automatic queue persistence\n• Complete queue management (clear, delete all)\n• Keyboard shortcuts and context menus\n• Settings persistence",
+                            Text = "• Batch transcription with queue management\n• Multiple audio/video format support\n• Real-time progress tracking with total ETA\n• Automatic queue persistence\n• Complete queue management (clear, delete all)\n• File overwrite protection with user choice\n• Keyboard shortcuts and context menus\n• Smart task handling - stopped tasks reset to pending\n• Error task recovery - reset failed tasks to retry\n• Settings persistence",
                             TextWrapping = TextWrapping.Wrap,
                             Margin = new Thickness(16, 0, 0, 8)
                         }
@@ -870,6 +1029,18 @@ public sealed partial class MainPage : Page
                 taskViewModel.Status = e.Status.ToString();
                 taskViewModel.ErrorMessage = e.ErrorMessage;
                 taskViewModel.OutputPath = e.OutputPath;
+            }
+            
+            // Show loading messages in the status bar for better user feedback
+            if (e.Status == Core.Models.TaskStatus.Processing && !string.IsNullOrEmpty(e.ErrorMessage))
+            {
+                // Check if this is a loading/initialization message (not an actual error)
+                if (e.ErrorMessage.Contains("Loading") || e.ErrorMessage.Contains("Initializing") || 
+                    e.ErrorMessage.Contains("Checking") || e.ErrorMessage.Contains("Model loaded"))
+                {
+                    var fileName = Path.GetFileName(taskViewModel?.FilePath ?? "Unknown");
+                    UpdateStatus($"{fileName}: {e.ErrorMessage}");
+                }
             }
         });
     }
@@ -1227,15 +1398,9 @@ public sealed partial class MainPage : Page
         args.Handled = true;
     }
 
-    private void PauseQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    private void StopQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        PauseQueueButton_Click(null!, null!);
-        args.Handled = true;
-    }
-
-    private void CancelQueue_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        CancelCurrentButton_Click(null!, null!);
+        StopQueueButton_Click(null!, null!);
         args.Handled = true;
     }
 
@@ -1257,6 +1422,12 @@ public sealed partial class MainPage : Page
     private void ShowHelp_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         AboutButton_Click(null!, null!);
+        args.Handled = true;
+    }
+
+    private void ResetErrors_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        ResetErrorsButton_Click(null!, null!);
         args.Handled = true;
     }
 
@@ -1418,5 +1589,56 @@ public sealed partial class MainPage : Page
     {
         var fallbackUserSettings = new UserSettingsService();
         return new ModelDiscovery(fallbackUserSettings, null);
+    }
+
+    private async void ResetErrorsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_queueManager != null)
+        {
+            try
+            {
+                var errorTasksCount = _queueManager.Queue.Tasks.Count(t => t.Status == Core.Models.TaskStatus.Error);
+                if (errorTasksCount == 0)
+                {
+                    UpdateStatus("No failed tasks to reset");
+                    return;
+                }
+
+                var confirmDialog = new ContentDialog
+                {
+                    Title = "Reset Failed Tasks",
+                    Content = $"Reset {errorTasksCount} failed task(s) back to pending status?\n\nThis will allow them to be processed again when the queue is started.",
+                    PrimaryButtonText = "Reset",
+                    CloseButtonText = "Cancel",
+                    DefaultButton = ContentDialogButton.Primary,
+                    XamlRoot = XamlRoot
+                };
+
+                var result = await confirmDialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                {
+                    await _queueManager.ResetAllErrorTasksAsync();
+                    
+                    // Update UI task list to reflect the reset
+                    var errorTaskViewModels = _tasks.Where(t => t.Status == "Error").ToList();
+                    foreach (var taskViewModel in errorTaskViewModels)
+                    {
+                        taskViewModel.Status = "Pending";
+                        taskViewModel.ErrorMessage = null;
+                        taskViewModel.Progress = 0;
+                    }
+                    
+                    UpdateStatus($"Reset {errorTasksCount} failed tasks to pending");
+                    _logger.LogInformation("User manually reset {ErrorTasksCount} error tasks to pending", errorTasksCount);
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = $"Failed to reset error tasks: {ex.Message}";
+                UpdateStatus(errorMessage);
+                _logger.LogError(ex, "ResetErrorsButton_Click error");
+                await ShowErrorDialogAsync("Reset Errors Error", errorMessage);
+            }
+        }
     }
 }
