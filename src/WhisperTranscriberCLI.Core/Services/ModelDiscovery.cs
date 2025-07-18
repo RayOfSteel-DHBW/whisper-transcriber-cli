@@ -1,13 +1,18 @@
+using Microsoft.Extensions.Logging;
+
 namespace WhisperTranscriberCLI.Core.Services;
 
 public class ModelDiscovery
 {
     private readonly UserSettingsService _settingsService;
+    private readonly ILogger<ModelDiscovery>? _logger;
     private string _modelDirectory;
 
-    public ModelDiscovery()
+    public ModelDiscovery(ILogger<ModelDiscovery>? logger = null)
     {
-        _settingsService = new UserSettingsService();
+        _logger = logger;
+        // Pass null to UserSettingsService instead of mismatched logger type
+        _settingsService = new UserSettingsService(null);
         _modelDirectory = GetModelDirectory();
     }
 
@@ -19,51 +24,53 @@ public class ModelDiscovery
         {
             try
             {
-                LogError("Checking if model path setup is needed...");
+                _logger?.LogDebug("Checking if model path setup is needed");
                 
                 // Check if we have a saved user preference
                 var savedPath = _settingsService.Settings.ModelsPath;
-                LogError($"User saved path: '{savedPath}'");
+                _logger?.LogDebug("User saved path: '{SavedPath}'", savedPath);
                 
                 if (!string.IsNullOrEmpty(savedPath) && Directory.Exists(savedPath) && 
                     Directory.GetFiles(savedPath, "*.bin").Length > 0)
                 {
-                    LogError($"User saved path is valid with {Directory.GetFiles(savedPath, "*.bin").Length} models");
+                    var modelCount = Directory.GetFiles(savedPath, "*.bin").Length;
+                    _logger?.LogDebug("User saved path is valid with {ModelCount} models", modelCount);
                     return false; // User has valid saved preference
                 }
 
                 // Check if central repo path exists (for dev environment)
                 var repoPath = GetCentralRepoPath();
-                LogError($"Central repo path: '{repoPath}'");
+                _logger?.LogDebug("Central repo path: '{RepoPath}'", repoPath);
                 
                 if (!string.IsNullOrEmpty(repoPath) && Directory.Exists(repoPath) && 
                     Directory.GetFiles(repoPath, "*.bin").Length > 0)
                 {
-                    LogError($"Central repo path is valid with {Directory.GetFiles(repoPath, "*.bin").Length} models");
+                    var modelCount = Directory.GetFiles(repoPath, "*.bin").Length;
+                    _logger?.LogDebug("Central repo path is valid with {ModelCount} models", modelCount);
                     // Auto-save this path to avoid future prompts in dev environment
                     _settingsService.SetModelsPath(repoPath);
                     _modelDirectory = repoPath;
-                    LogError($"Auto-saved central repo path to user settings");
+                    _logger?.LogInformation("Auto-saved central repo path to user settings");
                     return false;
                 }
 
                 // Check current directory fallback
                 var localPath = Path.Combine(Directory.GetCurrentDirectory(), "whispermodels");
-                LogError($"Local fallback path: '{localPath}'");
+                _logger?.LogDebug("Local fallback path: '{LocalPath}'", localPath);
                 
                 if (Directory.Exists(localPath) && Directory.GetFiles(localPath, "*.bin").Length > 0)
                 {
-                    LogError($"Local fallback path is valid with {Directory.GetFiles(localPath, "*.bin").Length} models");
+                    _logger?.LogDebug("Local fallback path is valid with {ModelCount} models", Directory.GetFiles(localPath, "*.bin").Length);
                     return false;
                 }
 
                 // No valid path found - need setup
-                LogError("No valid model paths found - setup needed");
+                _logger?.LogWarning("No valid model paths found - setup needed");
                 return true;
             }
             catch (Exception ex)
             {
-                LogError($"Error checking model path setup requirements: {ex.Message}");
+                _logger?.LogError(ex, "Error checking model path setup requirements");
                 return true; // Assume setup needed if error occurs
             }
         }
@@ -81,7 +88,7 @@ public class ModelDiscovery
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to set model directory to {modelDirectory}: {ex.Message}");
+            _logger?.LogError(ex, "Failed to set model directory to {ModelDirectory}", modelDirectory);
         }
     }
 
@@ -139,7 +146,7 @@ public class ModelDiscovery
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to find best available model: {ex.Message}");
+            _logger?.LogError(ex, "Failed to find best available model");
             return null;
         }
     }
@@ -156,7 +163,7 @@ public class ModelDiscovery
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to find model {modelName}: {ex.Message}");
+            _logger?.LogError(ex, "Failed to find model {ModelName}", modelName);
             return null;
         }
     }
@@ -171,7 +178,7 @@ public class ModelDiscovery
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to reset model path: {ex.Message}");
+            _logger?.LogError(ex, "Failed to reset model path");
         }
     }
 
@@ -210,7 +217,7 @@ public class ModelDiscovery
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to get model directory: {ex.Message}");
+            _logger?.LogError(ex, "Failed to get model directory");
             return string.Empty;
         }
     }
@@ -259,11 +266,6 @@ public class ModelDiscovery
         return $"{len:0.#} {sizes[order]}";
     }
 
-    private static void LogError(string message)
-    {
-        System.Diagnostics.Debug.WriteLine($"ModelDiscovery: {message}");
-        try { Console.WriteLine($"ModelDiscovery: {message}"); } catch { }
-    }
 }
 
 public class ModelInfo

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 
 namespace WhisperTranscriberCLI.Core.Services;
 
@@ -11,10 +12,12 @@ internal partial class UserSettingsJsonContext : JsonSerializerContext
 public class UserSettingsService
 {
     private readonly string _settingsFilePath;
+    private readonly ILogger<UserSettingsService>? _logger;
     private UserSettings _settings;
 
-    public UserSettingsService()
+    public UserSettingsService(ILogger<UserSettingsService>? logger = null)
     {
+        _logger = logger;
         // Store settings in user's app data directory
         var appDataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
@@ -54,7 +57,7 @@ public class UserSettingsService
         catch (Exception ex)
         {
             // Log the error but continue with defaults
-            System.Diagnostics.Debug.WriteLine($"Failed to load user settings: {ex.Message}");
+            _logger?.LogWarning(ex, "Failed to load user settings, using defaults");
         }
 
         return new UserSettings();
@@ -70,7 +73,7 @@ public class UserSettingsService
         catch (Exception ex)
         {
             // Log the error but don't crash the app
-            System.Diagnostics.Debug.WriteLine($"Failed to save user settings: {ex.Message}");
+            _logger?.LogError(ex, "Failed to save user settings");
         }
     }
 }

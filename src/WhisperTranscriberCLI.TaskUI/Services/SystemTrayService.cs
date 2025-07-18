@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Extensions.Logging;
 using Windows.UI.Notifications;
 using Windows.Data.Xml.Dom;
 
@@ -7,6 +8,7 @@ namespace WhisperTranscriberCLI.TaskUI.Services;
 public class SystemTrayService : IDisposable
 {
     private readonly SettingsService _settingsService;
+    private readonly ILogger<SystemTrayService>? _logger;
     private bool _isDisposed = false;
 
     public event EventHandler? ShowWindowRequested;
@@ -15,9 +17,10 @@ public class SystemTrayService : IDisposable
     public event EventHandler? PauseQueueRequested;
     public event EventHandler? ExitRequested;
 
-    public SystemTrayService(Window mainWindow, SettingsService settingsService)
+    public SystemTrayService(Window mainWindow, SettingsService settingsService, ILogger<SystemTrayService>? logger = null)
     {
         _settingsService = settingsService;
+        _logger = logger;
     }
 
     public void ShowWindow()
@@ -48,7 +51,7 @@ public class SystemTrayService : IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to show notification: {ex.Message}");
+            _logger?.LogWarning(ex, "Failed to show notification");
         }
     }
 

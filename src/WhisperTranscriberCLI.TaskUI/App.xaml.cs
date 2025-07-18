@@ -1,7 +1,11 @@
-housing Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using WhisperTranscriberCLI.TaskUI.Views;
+using WhisperTranscriberCLI.TaskUI.Services;
 
 namespace WhisperTranscriberCLI.TaskUI
 {
@@ -11,9 +15,10 @@ namespace WhisperTranscriberCLI.TaskUI
     public partial class App : Application
     {
         private Window? window;
-        private MainPage? mainPage;
+        private IHost? _host;
         
         public static Window MainWindow { get; private set; } = null!;
+        public static IServiceProvider Services { get; private set; } = null!;
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -23,10 +28,16 @@ namespace WhisperTranscriberCLI.TaskUI
         {
             InitializeComponent();
             
-#if DEBUG
-            // Enable immediate debug output flushing
-            System.Diagnostics.Debug.AutoFlush = true;
-#endif
+            // Setup dependency injection and logging
+            _host = Host.CreateDefaultBuilder()
+                .ConfigureServices(services =>
+                {
+                    services.AddFileLogging();
+                    services.AddSingleton<MainPage>();
+                })
+                .Build();
+            
+            Services = _host.Services;
         }
 
         /// <summary>
@@ -46,7 +57,10 @@ namespace WhisperTranscriberCLI.TaskUI
                 window.Content = rootFrame;
             }
 
-            _ = rootFrame.Navigate(typeof(MainPage), e.Arguments);
+            // Use dependency injection to get MainPage instance instead of navigating to the type
+            var mainPage = Services.GetRequiredService<MainPage>();
+            rootFrame.Content = mainPage;
+            
             window.Title = "Whisper Transcription Queue";
             
             // Set up window closing behavior
@@ -80,6 +94,8 @@ namespace WhisperTranscriberCLI.TaskUI
         /// <param name="e">Details about the navigation failure</param>
         void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
         {
+            var logger = Services.GetService<ILogger<App>>();
+            logger?.LogError("Navigation failed to page: {PageType}", e.SourcePageType.FullName);
             throw new Exception("Failed to load Page " + e.SourcePageType.FullName);
         }
     }

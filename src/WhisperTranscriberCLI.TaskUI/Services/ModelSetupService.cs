@@ -32,7 +32,7 @@ public class ModelSetupService
             var modelsPath = await BrowseForModelsDirectoryAsync();
             if (!string.IsNullOrEmpty(modelsPath))
             {
-                var modelDiscovery = new ModelDiscovery();
+                var modelDiscovery = new ModelDiscovery(null);
                 modelDiscovery.SetModelDirectory(modelsPath);
                 return true;
             }

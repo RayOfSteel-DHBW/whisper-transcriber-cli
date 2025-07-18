@@ -3,6 +3,9 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using Microsoft.UI.Dispatching;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -29,31 +32,24 @@ public sealed partial class MainPage : Page
     private readonly SettingsService _settingsService;
     private readonly SystemCheckService _systemCheckService;
     private readonly SystemTrayService _systemTrayService;
+    private readonly ILogger<MainPage> _logger;
     private QueueManager? _queueManager;
     private bool _isInitialized = false;
-
-    private static void LogError(string message)
+    
+    // Parameterless constructor for XAML (fallback)
+    public MainPage() : this(null)
     {
-        // Use both Debug.WriteLine (for Visual Studio) and Console.WriteLine (for standalone)
-        Debug.WriteLine(message);
-        try 
-        { 
-            Console.WriteLine(message); 
-        } 
-        catch 
-        { 
-            // Ignore console errors in WinUI apps
-        }
     }
     
-    public MainPage()
+    public MainPage(ILogger<MainPage>? logger)
     {
         InitializeComponent();
-        _modelDiscovery = new ModelDiscovery();
-        _audioDurationService = new AudioDurationService();
-        _settingsService = new SettingsService();
-        _systemCheckService = new SystemCheckService();
-        _systemTrayService = new SystemTrayService(App.MainWindow, _settingsService);
+        _logger = logger ?? App.Services?.GetService<ILogger<MainPage>>() ?? NullLogger<MainPage>.Instance;
+        _modelDiscovery = new ModelDiscovery(null);
+        _audioDurationService = new AudioDurationService(null);
+        _settingsService = new SettingsService(null);
+        _systemCheckService = new SystemCheckService(null);
+        _systemTrayService = new SystemTrayService(App.MainWindow, _settingsService, null);
         
         InitializeSystemTray();
         
@@ -78,7 +74,7 @@ public sealed partial class MainPage : Page
         }
         catch (Exception ex)
         {
-            LogError($"Error during system check: {ex}");
+            _logger.LogError(ex, "Error during system check");
             UpdateStatus($"System check failed: {ex.Message}");
         }
     }
@@ -158,7 +154,7 @@ public sealed partial class MainPage : Page
             if (_modelDiscovery.NeedsModelPathSetup)
             {
                 UpdateStatus("Models setup required...");
-                LogError($"Model setup needed - ModelDirectory: '{_modelDiscovery.ModelDirectory}', NeedsSetup: {_modelDiscovery.NeedsModelPathSetup}");
+                _logger.LogInformation("Model setup needed - ModelDirectory: '{ModelDirectory}', NeedsSetup: {NeedsSetup}", _modelDiscovery.ModelDirectory, _modelDiscovery.NeedsModelPathSetup);
                 
                 try
                 {
@@ -168,14 +164,14 @@ public sealed partial class MainPage : Page
                     if (!setupComplete)
                     {
                         UpdateStatus("Model setup cancelled - some features will be unavailable");
-                        LogError("User cancelled model setup");
+                        _logger.LogInformation("User cancelled model setup");
                     }
                     else
                     {
                         // Reload models after setup
                         LoadModels();
                         UpdateStatus("Models setup complete!");
-                        LogError("Model setup completed successfully");
+                        _logger.LogInformation("Model setup completed successfully");
                         
                         // Re-check system requirements after model setup
                         result = await _systemCheckService.CheckSystemRequirementsAsync();
@@ -184,25 +180,26 @@ public sealed partial class MainPage : Page
                 catch (Exception ex)
                 {
                     UpdateStatus($"Model setup failed: {ex.Message}");
-                    LogError($"Model setup error: {ex}");
+                    _logger.LogError(ex, "Model setup error");
                     await ShowErrorDialogAsync("Model Setup Error", 
                         $"Failed to configure Whisper models: {ex.Message}\n\nTranscription features may not work correctly.");
                 }
             }
             else
             {
-                LogError($"Model setup not needed - ModelDirectory: '{_modelDiscovery.ModelDirectory}', Found {_modelDiscovery.GetAvailableModels().Count} models");
+                var modelCount = _modelDiscovery.GetAvailableModels().Count;
+                _logger.LogInformation("Model setup not needed - ModelDirectory: '{ModelDirectory}', Found {ModelCount} models", _modelDiscovery.ModelDirectory, modelCount);
             }
             
             if (result.IsSystemReady)
             {
                 UpdateStatus("System ready for transcription");
-                LogError("System check passed - all requirements met");
+                _logger.LogInformation("System check passed - all requirements met");
             }
             else
             {
                 UpdateStatus(result.GetStatusMessage());
-                LogError($"System check failed: {result.GetStatusMessage()}");
+                _logger.LogWarning("System check failed: {StatusMessage}", result.GetStatusMessage());
                 await ShowSystemRequirementsDialog(result);
             }
         }
@@ -210,7 +207,7 @@ public sealed partial class MainPage : Page
         {
             var errorMessage = $"System check failed: {ex.Message}";
             UpdateStatus(errorMessage);
-            LogError($"CheckSystemRequirementsAsync error: {ex}");
+            _logger.LogError(ex, "CheckSystemRequirementsAsync error");
             await ShowErrorDialogAsync("System Check Error", 
                 $"An unexpected error occurred during system initialization:\n\n{ex.Message}\n\nSome features may not work correctly.");
         }
@@ -223,7 +220,7 @@ public sealed partial class MainPage : Page
             // Ensure we have XamlRoot before showing dialog
             if (XamlRoot == null)
             {
-                LogError($"Cannot show dialog '{title}' - XamlRoot is null. Message: {message}");
+                _logger.LogWarning("Cannot show dialog '{Title}' - XamlRoot is null. Message: {Message}", title, message);
                 UpdateStatus($"Error: {message}");
                 return;
             }
@@ -249,7 +246,7 @@ public sealed partial class MainPage : Page
         catch (Exception ex)
         {
             // If we can't even show an error dialog, write to debug output
-            LogError($"Failed to show error dialog '{title}': {ex.Message}");
+            _logger.LogError(ex, "Failed to show error dialog '{Title}'", title);
             UpdateStatus($"Error: {message}");
         }
     }
@@ -261,7 +258,7 @@ public sealed partial class MainPage : Page
             // Ensure we have XamlRoot before showing dialog
             if (XamlRoot == null)
             {
-                LogError("Cannot show system requirements dialog - XamlRoot is null");
+                _logger.LogWarning("Cannot show system requirements dialog - XamlRoot is null");
                 return;
             }
 
@@ -328,7 +325,7 @@ public sealed partial class MainPage : Page
         }
         catch (Exception ex)
         {
-            LogError($"Failed to show system requirements dialog: {ex.Message}");
+            _logger.LogError(ex, "Failed to show system requirements dialog");
         }
     }
 
@@ -351,7 +348,7 @@ public sealed partial class MainPage : Page
         {
             var errorMessage = $"Failed to initialize queue manager: {ex.Message}";
             UpdateStatus(errorMessage);
-            LogError($"QueueManager initialization error: {ex}");
+            _logger.LogError(ex, "QueueManager initialization error");
             
             // Show error dialog asynchronously
             _ = ShowErrorDialogAsync("Queue Manager Error", 
@@ -381,7 +378,7 @@ public sealed partial class MainPage : Page
         {
             var errorMessage = $"Failed to reinitialize queue manager: {ex.Message}";
             UpdateStatus(errorMessage);
-            LogError($"QueueManager reinitialization error: {ex}");
+            _logger.LogError(ex, "QueueManager reinitialization error");
             
             // Show error dialog asynchronously
             _ = ShowErrorDialogAsync("Queue Manager Error", 
@@ -407,7 +404,7 @@ public sealed partial class MainPage : Page
         {
             var errorMessage = $"Failed to load existing tasks: {ex.Message}";
             UpdateStatus(errorMessage);
-            LogError($"LoadExistingTasks error: {ex}");
+            _logger.LogError(ex, "LoadExistingTasks error");
         }
     }
 
@@ -441,7 +438,7 @@ public sealed partial class MainPage : Page
         {
             var errorMessage = $"Failed to add files: {ex.Message}";
             UpdateStatus(errorMessage);
-            LogError($"AddFilesButton_Click error: {ex}");
+            _logger.LogError(ex, "AddFilesButton_Click error");
             
             await ShowErrorDialogAsync("File Selection Error", 
                 $"An error occurred while selecting files:\n\n{ex.Message}");
@@ -483,7 +480,7 @@ public sealed partial class MainPage : Page
         {
             var errorMessage = $"Failed to add folder: {ex.Message}";
             UpdateStatus(errorMessage);
-            LogError($"AddFolderButton_Click error: {ex}");
+            _logger.LogError(ex, "AddFolderButton_Click error");
             
             await ShowErrorDialogAsync("Folder Selection Error", 
                 $"An error occurred while selecting a folder:\n\n{ex.Message}");
@@ -532,7 +529,7 @@ public sealed partial class MainPage : Page
                 catch (Exception ex)
                 {
                     failed++;
-                    Debug.WriteLine($"Failed to add file {filePath}: {ex.Message}");
+                    _logger.LogError(ex, "Failed to add file {FilePath}", filePath);
                     UpdateStatus($"Failed to add {Path.GetFileName(filePath)}: {ex.Message}");
                 }
             }
@@ -552,7 +549,7 @@ public sealed partial class MainPage : Page
         {
             var errorMessage = $"Failed to add files to queue: {ex.Message}";
             UpdateStatus(errorMessage);
-            LogError($"AddFilesToQueue error: {ex}");
+            _logger.LogError(ex, "AddFilesToQueue error");
             
             await ShowErrorDialogAsync("Queue Operation Error", 
                 $"An error occurred while adding files to the queue:\n\n{ex.Message}");
@@ -975,7 +972,7 @@ public sealed partial class MainPage : Page
             catch (Exception ex)
             {
                 UpdateStatus($"Failed to open output: {ex.Message}");
-                LogError($"OpenOutputMenuItem_Click error: {ex}");
+                _logger.LogError(ex, "OpenOutputMenuItem_Click error");
             }
         }
     }
@@ -997,7 +994,7 @@ public sealed partial class MainPage : Page
             catch (Exception ex)
             {
                 UpdateStatus($"Failed to open folder: {ex.Message}");
-                LogError($"OpenFolderMenuItem_Click error: {ex}");
+                _logger.LogError(ex, "OpenFolderMenuItem_Click error");
             }
         }
     }
@@ -1170,7 +1167,7 @@ public sealed partial class MainPage : Page
         catch (Exception ex)
         {
             UpdateStatus($"Error processing dropped files: {ex.Message}");
-            LogError($"TaskListView_Drop error: {ex}");
+            _logger.LogError(ex, "TaskListView_Drop error");
         }
     }
 
@@ -1197,7 +1194,7 @@ public sealed partial class MainPage : Page
         catch (Exception ex)
         {
             UpdateStatus($"Error processing folder {folder.Name}: {ex.Message}");
-            LogError($"ProcessDroppedFolderAsync error: {ex}");
+            _logger.LogError(ex, "ProcessDroppedFolderAsync error");
         }
     }
 
@@ -1264,7 +1261,7 @@ public sealed partial class MainPage : Page
         catch (Exception ex)
         {
             UpdateStatus($"Failed to open output file: {ex.Message}");
-            LogError($"OpenOutputFileAsync error: {ex}");
+            _logger.LogError(ex, "OpenOutputFileAsync error");
         }
     }
 }

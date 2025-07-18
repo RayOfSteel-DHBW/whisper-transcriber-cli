@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using FFMpegCore;
 
 namespace WhisperTranscriberCLI.Core.Services;
@@ -10,10 +11,13 @@ namespace WhisperTranscriberCLI.Core.Services;
 public class SystemCheckService
 {
     private readonly ModelDiscovery _modelDiscovery;
+    private readonly ILogger<SystemCheckService>? _logger;
 
-    public SystemCheckService()
+    public SystemCheckService(ILogger<SystemCheckService>? logger = null)
     {
-        _modelDiscovery = new ModelDiscovery();
+        _logger = logger;
+        // Pass null to ModelDiscovery instead of mismatched logger type
+        _modelDiscovery = new ModelDiscovery(null);
     }
 
     public async Task<SystemCheckResult> CheckSystemRequirementsAsync()
@@ -63,7 +67,7 @@ public class SystemCheckService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to check FFmpeg availability: {ex}");
+            _logger?.LogError(ex, "Failed to check FFmpeg availability");
             return false;
         }
     }
@@ -76,13 +80,13 @@ public class SystemCheckService
             var models = _modelDiscovery.GetAvailableModels();
             var hasModels = models.Count > 0;
             
-            Debug.WriteLine($"SystemCheckService: Found {models.Count} models in directory: {_modelDiscovery.ModelDirectory}");
+            _logger?.LogInformation("Found {ModelCount} models in directory: {ModelDirectory}", models.Count, _modelDiscovery.ModelDirectory);
             
             return hasModels;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to check Whisper models: {ex}");
+            _logger?.LogError(ex, "Failed to check Whisper models");
             return false;
         }
     }
@@ -97,7 +101,7 @@ public class SystemCheckService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to check .NET runtime: {ex}");
+            _logger?.LogError(ex, "Failed to check .NET runtime");
             return false;
         }
     }
@@ -114,7 +118,7 @@ public class SystemCheckService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to check disk space: {ex}");
+            _logger?.LogError(ex, "Failed to check disk space");
             return true; // Assume OK if we can't check
         }
     }

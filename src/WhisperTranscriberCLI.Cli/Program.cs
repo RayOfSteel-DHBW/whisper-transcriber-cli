@@ -4,6 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using WhisperTranscriberCLI.Utilities;
 using WhisperTranscriberCLI.Core.Services;
 
@@ -12,13 +15,21 @@ namespace WhisperTranscriberCLI
     public class Program
     {
         private static readonly string[] SupportedExtensions = { ".mp3", ".wav", ".mp4", ".avi", ".mkv", ".m4a", ".flac", ".ogg", ".webm", ".wma" };
+        private static ILogger<Program>? _logger;
         
         public static async Task Main(string[] args)
         {
             var options = ParseCommandLineArgs(args);
-#if DEBUG
-            System.Diagnostics.Debug.AutoFlush = true;
-#endif
+            
+            // Setup logging
+            var host = Host.CreateDefaultBuilder(args)
+                .ConfigureServices(services => 
+                {
+                    services.AddLogging();
+                })
+                .Build();
+            
+            _logger = host.Services.GetRequiredService<ILogger<Program>>();
             if (options.ShowHelp || options.ShowVersion)
             {
                 if (options.ShowVersion)
@@ -37,6 +48,7 @@ namespace WhisperTranscriberCLI
             // Validate input
             if (string.IsNullOrEmpty(options.InputPath))
             {
+                _logger?.LogError("No input file or directory specified");
                 Console.Error.WriteLine("Error: No input file or directory specified.");
                 Console.Error.WriteLine("Use --help for usage information.");
                 Environment.Exit(1);
@@ -48,6 +60,7 @@ namespace WhisperTranscriberCLI
                 string selectedModel = ShowModelPicker();
                 if (string.IsNullOrEmpty(selectedModel))
                 {
+                    _logger?.LogError("No model selected by user");
                     Console.Error.WriteLine("No model selected. Exiting.");
                     Environment.Exit(1);
                 }
@@ -56,6 +69,8 @@ namespace WhisperTranscriberCLI
 
             try
             {
+                _logger?.LogInformation("Starting transcription process with model: {Model}, GPU: {UseGpu}", options.Model, options.UseGpu);
+                
                 var mediaConverter = new FfmpegMediaConverter();
                 var transcriptionService = new WhisperNetTranscriptionService(mediaConverter, options.UseGpu, options.Model);
 
@@ -64,11 +79,13 @@ namespace WhisperTranscriberCLI
                 
                 if (filesToProcess.Count == 0)
                 {
+                    _logger?.LogWarning("No supported files found in: {InputPath}", options.InputPath);
                     Console.WriteLine($"No supported audio/video files found in: {options.InputPath}");
                     Console.WriteLine($"Supported formats: {string.Join(", ", SupportedExtensions)}");
                     return;
                 }
 
+                _logger?.LogInformation("Found {FileCount} files to process", filesToProcess.Count);
                 Console.WriteLine($"Found {filesToProcess.Count} file(s) to process");
                 Console.WriteLine($"Using model: {options.Model}");
                 Console.WriteLine($"Acceleration: {(options.UseGpu ? "GPU (CUDA/Vulkan)" : "CPU")}");
@@ -91,17 +108,20 @@ namespace WhisperTranscriberCLI
                         
                         if (string.IsNullOrEmpty(outputPath))
                         {
+                            _logger?.LogError("Transcription failed for {FilePath}: Service not available", filePath);
                             Console.WriteLine($"✗ Failed: Transcription service not available");
                             failed++;
                         }
                         else
                         {
+                            _logger?.LogInformation("Successfully transcribed {FilePath} to {OutputPath}", filePath, outputPath);
                             Console.WriteLine($"✓ → {Path.GetFileName(outputPath)}");
                             processed++;
                         }
                     }
                     catch (Exception ex)
                     {
+                        _logger?.LogError(ex, "Failed to transcribe {FilePath}", filePath);
                         Console.WriteLine($"✗ Failed: {ex.Message}");
                         failed++;
                         
@@ -113,6 +133,7 @@ namespace WhisperTranscriberCLI
                 }
 
                 Console.WriteLine();
+                _logger?.LogInformation("Transcription completed: {Processed} successful, {Failed} failed", processed, failed);
                 Console.WriteLine($"Completed: {processed} successful, {failed} failed");
                 
                 if (failed > 0)
@@ -122,6 +143,7 @@ namespace WhisperTranscriberCLI
             }
             catch (Exception ex)
             {
+                _logger?.LogCritical(ex, "Fatal error in program execution");
                 Console.Error.WriteLine($"Fatal error: {ex.Message}");
                 if (options.Verbose)
                 {
@@ -144,6 +166,7 @@ namespace WhisperTranscriberCLI
                 }
                 else
                 {
+                    _logger?.LogWarning("Unsupported file format: {Extension} for file: {FilePath}", Path.GetExtension(inputPath), inputPath);
                     Console.Error.WriteLine($"Unsupported file format: {Path.GetExtension(inputPath)}");
                 }
             }
@@ -162,6 +185,7 @@ namespace WhisperTranscriberCLI
             }
             else
             {
+                _logger?.LogError("Input path not found: {InputPath}", inputPath);
                 Console.Error.WriteLine($"Input path not found: {inputPath}");
             }
 
@@ -178,7 +202,7 @@ namespace WhisperTranscriberCLI
         {
             Console.WriteLine("Available Whisper models:");
             
-            var modelDiscovery = new ModelDiscovery();
+            var modelDiscovery = new ModelDiscovery(null);
             
             if (modelDiscovery.NeedsModelPathSetup)
             {
@@ -207,7 +231,7 @@ namespace WhisperTranscriberCLI
 
         private static string ShowModelPicker()
         {
-            var modelDiscovery = new ModelDiscovery();
+            var modelDiscovery = new ModelDiscovery(null);
             
             if (modelDiscovery.NeedsModelPathSetup)
             {

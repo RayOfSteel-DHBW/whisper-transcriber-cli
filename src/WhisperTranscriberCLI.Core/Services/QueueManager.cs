@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using WhisperTranscriberCLI.Core.Models;
 using WhisperTranscriberCLI.Core.Events;
 using WhisperTranscriberCLI.Core.Interfaces;
@@ -9,6 +10,7 @@ public class QueueManager : IDisposable
 {
     private readonly string _queueFilePath;
     private readonly IMediaConverter _mediaConverter;
+    private readonly ILogger<QueueManager>? _logger;
     private readonly Timer _autoSaveTimer;
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly SemaphoreSlim _queueSemaphore;
@@ -22,11 +24,12 @@ public class QueueManager : IDisposable
     public event EventHandler<TranscriptionTask>? TaskCompleted;
     public event EventHandler<TranscriptionTask>? TaskFailed;
 
-    public QueueManager(string queueFilePath, IMediaConverter mediaConverter, bool useGpu = false)
+    public QueueManager(string queueFilePath, IMediaConverter mediaConverter, bool useGpu = false, ILogger<QueueManager>? logger = null)
     {
         _queueFilePath = queueFilePath;
         _mediaConverter = mediaConverter;
         _useGpu = useGpu;
+        _logger = logger;
         _cancellationTokenSource = new CancellationTokenSource();
         _queueSemaphore = new SemaphoreSlim(1, 1);
         _queue = new TranscriptionQueue();
@@ -215,7 +218,7 @@ public class QueueManager : IDisposable
         catch (Exception ex)
         {
             // Log to debug output but don't crash the app
-            System.Diagnostics.Debug.WriteLine($"Failed to save queue: {ex.Message}");
+            _logger?.LogError(ex, "Failed to save queue");
             // Also try to notify via StatusChanged if possible
             StatusChanged?.Invoke(this, new TranscriptionStatusEventArgs
             {
@@ -243,7 +246,7 @@ public class QueueManager : IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to load queue: {ex.Message}");
+            _logger?.LogWarning(ex, "Failed to load queue, using empty queue");
             _queue = new TranscriptionQueue();
         }
     }
@@ -256,7 +259,7 @@ public class QueueManager : IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Auto-save failed: {ex.Message}");
+            _logger?.LogWarning(ex, "Auto-save failed");
         }
     }
 
