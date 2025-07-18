@@ -6,6 +6,7 @@
     <AssemblyName>WhisperTranscriberCLI.Core</AssemblyName>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <Configurations>Debug;Release;DeployDebug</Configurations>
   </PropertyGroup>
 
   <ItemGroup>

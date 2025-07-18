@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
@@ -23,9 +23,10 @@
         <Platform>x64</Platform>
         <ApplicationManifest>app.manifest</ApplicationManifest>
         <PublishProfile>win-$(Platform).pubxml</PublishProfile>
-        <RuntimeIdentifiers Condition="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')) >= 8">win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+        <RuntimeIdentifiers Condition="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')) &gt;= 8">win-x86;win-x64;win-arm64</RuntimeIdentifiers>
         <RuntimeIdentifiers Condition="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')) &lt; 8">win10-x86;win10-x64;win10-arm64</RuntimeIdentifiers>
         <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+        <Configurations>Debug;Release;DeployDebug</Configurations>
     </PropertyGroup>
 
     <ItemGroup>
@@ -51,13 +52,22 @@
         <ProjectReference Include="..\WhisperTranscriberCLI.Core\WhisperTranscriberCLI.Core.csproj" />
     </ItemGroup>
 
+    <!-- Include whisper models in output -->
+    <ItemGroup>
+        <None Include="..\..\whispermodels\*.bin" Condition="Exists('..\..\whispermodels')">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <Link>whispermodels\%(Filename)%(Extension)</Link>
+        </None>
+    </ItemGroup>
+
     <!-- 
         Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
         Tools extension to be activated for this project even if the Windows App SDK Nuget
         package has not yet been restored.
     -->
     <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-        <ProjectCapability Include="Msix"/>
+        <ProjectCapability Include="Msix" />
     </ItemGroup>
 
     <!-- 

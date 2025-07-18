@@ -1,26 +1,10 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Navigation;
+using Microsoft.UI.Dispatching;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Windows.ApplicationModel.DataTransfer;
-using Windows.Storage;
-using Windows.Storage.Pickers;
-using WinRT.Interop;
-using WhisperTranscriberCLI.Core.Models;
-using WhisperTranscriberCLI.Core.Services;
-using WhisperTranscriberCLI.TaskUI.Services;
-using WhisperTranscriberCLI.TaskUI.ViewModels;
-using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml.Navigation;
-using Windows.UI.Text;Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
-using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
@@ -34,8 +18,6 @@ using WhisperTranscriberCLI.Core.Models;
 using WhisperTranscriberCLI.Core.Services;
 using WhisperTranscriberCLI.TaskUI.Services;
 using WhisperTranscriberCLI.TaskUI.ViewModels;
-using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml.Navigation;
 
 namespace WhisperTranscriberCLI.TaskUI.Views;
 
@@ -48,6 +30,7 @@ public sealed partial class MainPage : Page
     private readonly SystemCheckService _systemCheckService;
     private readonly SystemTrayService _systemTrayService;
     private QueueManager? _queueManager;
+    private bool _isInitialized = false;
     
     public MainPage()
     {
@@ -65,6 +48,9 @@ public sealed partial class MainPage : Page
         LoadSettings();
         InitializeQueueManager();
         InitializeTheme();
+        
+        _isInitialized = true;
+        
         _ = CheckSystemRequirementsAsync();
     }
 
@@ -406,7 +392,7 @@ public sealed partial class MainPage : Page
 
     private void ModelComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (e.AddedItems.Count > 0 && e.AddedItems[0] is ModelInfo selectedModel)
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is ModelInfo selectedModel && _isInitialized)
         {
             _settingsService.UpdateDefaultModel(selectedModel.Name);
         }
@@ -414,7 +400,8 @@ public sealed partial class MainPage : Page
 
     private void RecursiveCheckBox_Changed(object sender, RoutedEventArgs e)
     {
-        if (sender is CheckBox checkBox)
+        // Only update settings after initialization is complete
+        if (sender is CheckBox checkBox && _isInitialized)
         {
             _settingsService.UpdateRecursive(checkBox.IsChecked == true);
         }
@@ -422,7 +409,7 @@ public sealed partial class MainPage : Page
 
     private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (e.AddedItems.Count > 0 && e.AddedItems[0] is ComboBoxItem selectedItem)
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is ComboBoxItem selectedItem && _isInitialized)
         {
             var language = selectedItem.Content.ToString() ?? "auto";
             _settingsService.UpdateDefaultLanguage(language);

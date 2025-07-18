@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <Configurations>Debug;Release;DeployDebug</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
