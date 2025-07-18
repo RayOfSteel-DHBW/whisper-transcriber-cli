@@ -182,7 +182,16 @@
         
         <!-- Status bar -->
         <Grid Grid.Row="4" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" Padding="12,8">
-            <TextBlock x:Name="StatusTextBlock" Text="Ready" VerticalAlignment="Center"/>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- Loading indicator for when models are being loaded -->
+            <ProgressRing x:Name="StatusProgressRing" Grid.Column="0" Width="16" Height="16" Margin="0,0,8,0" IsActive="False" Visibility="Collapsed"/>
+            
+            <!-- Status text -->
+            <TextBlock x:Name="StatusTextBlock" Grid.Column="1" Text="Ready" VerticalAlignment="Center"/>
         </Grid>
     </Grid>
 </Page>

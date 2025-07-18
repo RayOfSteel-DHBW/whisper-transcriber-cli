@@ -528,6 +528,8 @@ public sealed partial class MainPage : Page
                 
                 // Show immediate feedback
                 UpdateStatus("Starting transcription queue...");
+                StatusProgressRing.IsActive = true;
+                StatusProgressRing.Visibility = Visibility.Visible;
                 
                 await _queueManager.StartProcessingAsync();
                 UpdateStatus("Queue processing started");
@@ -1040,7 +1042,17 @@ public sealed partial class MainPage : Page
                 {
                     var fileName = Path.GetFileName(taskViewModel?.FilePath ?? "Unknown");
                     UpdateStatus($"{fileName}: {e.ErrorMessage}");
+                    
+                    // Show loading indicator in status bar during model loading
+                    StatusProgressRing.IsActive = true;
+                    StatusProgressRing.Visibility = Visibility.Visible;
                 }
+            }
+            else
+            {
+                // Hide loading indicator when not in loading state
+                StatusProgressRing.IsActive = false;
+                StatusProgressRing.Visibility = Visibility.Collapsed;
             }
         });
     }
@@ -1049,6 +1061,10 @@ public sealed partial class MainPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
+            // Hide loading indicator when task completes
+            StatusProgressRing.IsActive = false;
+            StatusProgressRing.Visibility = Visibility.Collapsed;
+            
             UpdateStatus($"Task completed: {Path.GetFileName(e.FilePath)}");
             UpdateQueueProgress();
             
@@ -1068,6 +1084,10 @@ public sealed partial class MainPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
+            // Hide loading indicator when task fails
+            StatusProgressRing.IsActive = false;
+            StatusProgressRing.Visibility = Visibility.Collapsed;
+            
             UpdateStatus($"Task failed: {Path.GetFileName(e.FilePath)} - {e.ErrorMessage}");
             UpdateQueueProgress();
             
@@ -1082,6 +1102,10 @@ public sealed partial class MainPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
+            // Hide loading indicator once normal progress starts
+            StatusProgressRing.IsActive = false;
+            StatusProgressRing.Visibility = Visibility.Collapsed;
+            
             var processingTask = _tasks.FirstOrDefault(t => t.Status == "Processing");
             if (processingTask != null)
             {
