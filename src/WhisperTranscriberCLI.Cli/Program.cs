@@ -16,7 +16,9 @@ namespace WhisperTranscriberCLI
         public static async Task Main(string[] args)
         {
             var options = ParseCommandLineArgs(args);
-            
+#if DEBUG
+            System.Diagnostics.Debug.AutoFlush = true;
+#endif
             if (options.ShowHelp || options.ShowVersion)
             {
                 if (options.ShowVersion)
@@ -176,47 +178,53 @@ namespace WhisperTranscriberCLI
         {
             Console.WriteLine("Available Whisper models:");
             
-            string modelDir = Path.Combine(Directory.GetCurrentDirectory(), "whispermodels");
+            var modelDiscovery = new ModelDiscovery();
             
-            if (!Directory.Exists(modelDir))
+            if (modelDiscovery.NeedsModelPathSetup)
             {
-                Console.WriteLine("No models directory found. Run with a valid model to download default models.");
+                var modelsPath = ModelSetup.PromptForModelsDirectory();
+                if (string.IsNullOrEmpty(modelsPath))
+                {
+                    Console.WriteLine("No models directory selected. Exiting.");
+                    Environment.Exit(1);
+                }
+                modelDiscovery.SetModelDirectory(modelsPath);
+            }
+
+            var models = modelDiscovery.GetAvailableModels();
+            
+            if (models.Count == 0)
+            {
+                Console.WriteLine("No model files found.");
                 return;
             }
 
-            var modelFiles = Directory.GetFiles(modelDir, "*.bin");
-            
-            if (modelFiles.Length == 0)
+            foreach (var model in models)
             {
-                Console.WriteLine("No model files found in whispermodels directory.");
-                return;
-            }
-
-            foreach (string modelFile in modelFiles)
-            {
-                string modelName = Path.GetFileName(modelFile);
-                long sizeBytes = new FileInfo(modelFile).Length;
-                string size = FormatFileSize(sizeBytes);
-                
-                Console.WriteLine($"  {modelName} ({size})");
+                Console.WriteLine($"  {model.Name} ({model.FormattedSize})");
             }
         }
 
         private static string ShowModelPicker()
         {
-            string modelDir = Path.Combine(Directory.GetCurrentDirectory(), "whispermodels");
+            var modelDiscovery = new ModelDiscovery();
             
-            if (!Directory.Exists(modelDir))
+            if (modelDiscovery.NeedsModelPathSetup)
             {
-                Console.WriteLine("No models directory found. Please place model files (.bin) in the whispermodels directory.");
-                return string.Empty;
+                var modelsPath = ModelSetup.PromptForModelsDirectory();
+                if (string.IsNullOrEmpty(modelsPath))
+                {
+                    Console.WriteLine("No models directory selected. Exiting.");
+                    return string.Empty;
+                }
+                modelDiscovery.SetModelDirectory(modelsPath);
             }
 
-            var modelFiles = Directory.GetFiles(modelDir, "*.bin");
+            var models = modelDiscovery.GetAvailableModels();
             
-            if (modelFiles.Length == 0)
+            if (models.Count == 0)
             {
-                Console.WriteLine("No model files found in whispermodels directory.");
+                Console.WriteLine("No model files found in the selected directory.");
                 return string.Empty;
             }
 
@@ -224,31 +232,27 @@ namespace WhisperTranscriberCLI
             Console.WriteLine("Multiple models available. Please select one:");
             Console.WriteLine();
 
-            for (int i = 0; i < modelFiles.Length; i++)
+            for (int i = 0; i < models.Count; i++)
             {
-                string modelName = Path.GetFileName(modelFiles[i]);
-                long sizeBytes = new FileInfo(modelFiles[i]).Length;
-                string size = FormatFileSize(sizeBytes);
-                
-                Console.WriteLine($"  {i + 1}. {modelName} ({size})");
+                Console.WriteLine($"  {i + 1}. {models[i].Name} ({models[i].FormattedSize})");
             }
 
             Console.WriteLine();
-            Console.Write($"Enter your choice (1-{modelFiles.Length}): ");
+            Console.Write($"Enter your choice (1-{models.Count}): ");
 
             while (true)
             {
                 string input = Console.ReadLine()?.Trim() ?? "";
                 
-                if (int.TryParse(input, out int choice) && choice >= 1 && choice <= modelFiles.Length)
+                if (int.TryParse(input, out int choice) && choice >= 1 && choice <= models.Count)
                 {
-                    string selectedModel = Path.GetFileName(modelFiles[choice - 1]);
+                    string selectedModel = models[choice - 1].Name;
                     Console.WriteLine($"Selected: {selectedModel}");
                     Console.WriteLine();
                     return selectedModel;
                 }
                 
-                Console.Write($"Invalid choice. Please enter a number between 1 and {modelFiles.Length}: ");
+                Console.Write($"Invalid choice. Please enter a number between 1 and {models.Count}: ");
             }
         }
 

@@ -2,6 +2,15 @@ using System.Text.Json.Serialization;
 
 namespace WhisperTranscriberCLI.Core.Models;
 
+[JsonSerializable(typeof(TranscriptionQueue))]
+[JsonSerializable(typeof(TranscriptionTask))]
+[JsonSerializable(typeof(QueueSettings))]
+[JsonSerializable(typeof(WindowBounds))]
+[JsonSerializable(typeof(Dictionary<string, int>))]
+internal partial class TranscriptionQueueJsonContext : JsonSerializerContext
+{
+}
+
 public class TranscriptionQueue
 {
     [JsonPropertyName("schemaVersion")]

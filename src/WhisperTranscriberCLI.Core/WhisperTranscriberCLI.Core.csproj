@@ -6,7 +6,15 @@
     <AssemblyName>WhisperTranscriberCLI.Core</AssemblyName>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Configurations>Debug;Release;DeployDebug</Configurations>
+    <Configurations>Debug;Release;LocalTest</Configurations>
+  </PropertyGroup>
+
+  <!-- LocalTest Konfiguration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'LocalTest'">
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>true</Optimize>
+    <DefineConstants>DEBUG;TRACE;LOCALTEST</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,5 +25,7 @@
     <PackageReference Include="FFMpegCore" Version="5.1.0" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
+
+  <!-- No more automatic model copying - models will be discovered at runtime -->
 
 </Project>

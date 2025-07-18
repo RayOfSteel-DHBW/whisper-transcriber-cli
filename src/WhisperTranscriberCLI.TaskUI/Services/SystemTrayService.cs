@@ -15,7 +15,7 @@ public class SystemTrayService : IDisposable
     public event EventHandler? PauseQueueRequested;
     public event EventHandler? ExitRequested;
 
-    public SystemTrayService(Microsoft.UI.Xaml.Window mainWindow, SettingsService settingsService)
+    public SystemTrayService(Window mainWindow, SettingsService settingsService)
     {
         _settingsService = settingsService;
     }

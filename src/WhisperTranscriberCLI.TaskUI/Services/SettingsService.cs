@@ -1,12 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Windows.Storage;
 using WhisperTranscriberCLI.Core.Models;
 
 namespace WhisperTranscriberCLI.TaskUI.Services;
+
+[JsonSerializable(typeof(AppSettings))]
+internal partial class AppSettingsJsonContext : JsonSerializerContext
+{
+}
 
 public class SettingsService
 {
@@ -18,26 +26,88 @@ public class SettingsService
     public SettingsService()
     {
         _settings = new AppSettings();
+        
+        // For unpackaged WinUI 3 apps, ApplicationData.Current is not available
+        // Force file storage for better reliability
+        _useFileStorage = IsUnpackagedApp();
+        
         LoadSettings();
     }
 
     public AppSettings Settings => _settings;
 
+    private static bool IsUnpackagedApp()
+    {
+        // Check if we're running as an unpackaged app
+        try
+        {
+            var package = Windows.ApplicationModel.Package.Current;
+            return false; // We have a package
+        }
+        catch
+        {
+            return true; // No package = unpackaged app
+        }
+    }
+
+    private static void LogError(Exception ex, string message = "")
+    {
+        if (!string.IsNullOrEmpty(message))
+        {
+            LogError(message);
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine($"Exception Type: {ex.GetType().Name}");
+        builder.AppendLine($"Message: {ex.Message}");
+        builder.AppendLine($"StackTrace:\n{ex.StackTrace}");
+        LogError(builder.ToString());
+        
+        if (ex.InnerException != null)
+        {
+            LogError("--- Inner Exception ---");
+            LogError(ex.InnerException);
+        }
+    }
+
+    private static void LogError(string message)
+    {
+        // Use both Debug.WriteLine (for Visual Studio) and Console.WriteLine (for standalone)
+        Debug.WriteLine(message);
+        try 
+        { 
+            Console.WriteLine(message);
+        } 
+        catch 
+        { 
+            // Ignore console errors in WinUI apps
+        }
+    }
+
     public void LoadSettings()
     {
+        if (_useFileStorage)
+        {
+            LogError("Using file storage for settings (unpackaged app or ApplicationData unavailable)");
+            LoadSettingsFromFile();
+            return;
+        }
+
         try
         {
             // Initialize ApplicationData.Current safely
-            if (_localSettings == null && !_useFileStorage)
+            if (_localSettings == null)
             {
                 try
                 {
                     _localSettings = ApplicationData.Current.LocalSettings;
+                    LogError("Successfully initialized ApplicationData.Current");
                 }
-                catch (InvalidOperationException)
+                catch (InvalidOperationException ex)
                 {
                     // ApplicationData.Current is not available, fallback to JSON file
                     _useFileStorage = true;
+                    LogError(ex, "ApplicationData.Current not available, falling back to file storage");
                     LoadSettingsFromFile();
                     return;
                 }
@@ -45,15 +115,10 @@ public class SettingsService
                 {
                     // Other exceptions (like "parameter is incorrect"), also fallback to file
                     _useFileStorage = true;
+                    LogError(ex, "ApplicationData.Current initialization failed, falling back to file storage");
                     LoadSettingsFromFile();
                     return;
                 }
-            }
-
-            if (_useFileStorage)
-            {
-                LoadSettingsFromFile();
-                return;
             }
 
             // Try to load from ApplicationData first
@@ -113,10 +178,13 @@ public class SettingsService
             {
                 _settings.UseGpu = (bool)(_localSettings.Values["UseGpu"] ?? false);
             }
+            
+            LogError("Successfully loaded settings from ApplicationData");
         }
         catch (Exception ex)
         {
             // If loading fails, fallback to file storage
+            LogError(ex, "Failed to load settings from ApplicationData");
             _useFileStorage = true;
             LoadSettingsFromFile();
         }
@@ -129,32 +197,39 @@ public class SettingsService
             var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
                                           "WhisperTranscriberCLI", SettingsFileName);
             
+            LogError($"Loading settings from file: {settingsPath}");
+            
             if (File.Exists(settingsPath))
             {
                 var json = File.ReadAllText(settingsPath);
-                var loadedSettings = JsonSerializer.Deserialize<AppSettings>(json);
+                var loadedSettings = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings);
                 if (loadedSettings != null)
                 {
                     _settings = loadedSettings;
+                    LogError($"Successfully loaded settings from file");
                 }
+            }
+            else
+            {
+                LogError($"Settings file does not exist, using defaults");
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to load settings from file: {ex.Message}");
+            LogError(ex, "Failed to load settings from file");
         }
     }
 
     public void SaveSettings()
     {
+        if (_useFileStorage)
+        {
+            SaveSettingsToFile();
+            return;
+        }
+
         try
         {
-            if (_useFileStorage)
-            {
-                SaveSettingsToFile();
-                return;
-            }
-
             // Try to save to ApplicationData first
             if (_localSettings != null)
             {
@@ -172,6 +247,8 @@ public class SettingsService
                 _localSettings.Values["SystemTrayEnabled"] = _settings.SystemTrayEnabled;
                 _localSettings.Values["OpenOutputAfterCompletion"] = _settings.OpenOutputAfterCompletion;
                 _localSettings.Values["UseGpu"] = _settings.UseGpu;
+                
+                LogError("Successfully saved settings to ApplicationData");
             }
             else
             {
@@ -181,7 +258,7 @@ public class SettingsService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex.Message}");
+            LogError(ex, "Failed to save settings to ApplicationData");
             // Try fallback to file
             SaveSettingsToFile();
         }
@@ -196,12 +273,14 @@ public class SettingsService
             Directory.CreateDirectory(settingsDir);
             
             var settingsPath = Path.Combine(settingsDir, SettingsFileName);
-            var json = JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(_settings, AppSettingsJsonContext.Default.AppSettings);
             File.WriteAllText(settingsPath, json);
+            
+            LogError($"Successfully saved settings to file: {settingsPath}");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to save settings to file: {ex.Message}");
+            LogError(ex, "Failed to save settings to file");
         }
     }
 

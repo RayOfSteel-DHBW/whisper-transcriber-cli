@@ -26,7 +26,32 @@
         <RuntimeIdentifiers Condition="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')) &gt;= 8">win-x86;win-x64;win-arm64</RuntimeIdentifiers>
         <RuntimeIdentifiers Condition="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')) &lt; 8">win10-x86;win10-x64;win10-arm64</RuntimeIdentifiers>
         <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-        <Configurations>Debug;Release;DeployDebug</Configurations>
+        <Configurations>Debug;Release;LocalTest</Configurations>
+    </PropertyGroup>
+
+    <!-- Lokale Test-Konfiguration - Update-freundlich -->
+    <PropertyGroup Condition="'$(Configuration)' == 'LocalTest'">
+        <PublishSingleFile>false</PublishSingleFile>
+        <PublishTrimmed>false</PublishTrimmed>
+        <SelfContained>true</SelfContained>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <PublishReadyToRun>false</PublishReadyToRun>
+        <DebugType>portable</DebugType>
+        <DebugSymbols>true</DebugSymbols>
+        <Optimize>true</Optimize>
+        <DefineConstants>DEBUG;TRACE;LOCALTEST</DefineConstants>
+    </PropertyGroup>
+
+    <!-- Release-Konfiguration - Update-freundlich -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <PublishSingleFile>false</PublishSingleFile>
+        <PublishTrimmed>false</PublishTrimmed>
+        <SelfContained>true</SelfContained>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <PublishReadyToRun>true</PublishReadyToRun>
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+        <Optimize>true</Optimize>
     </PropertyGroup>
 
     <ItemGroup>
@@ -52,14 +77,8 @@
         <ProjectReference Include="..\WhisperTranscriberCLI.Core\WhisperTranscriberCLI.Core.csproj" />
     </ItemGroup>
 
-    <!-- Include whisper models in output -->
-    <ItemGroup>
-        <None Include="..\..\whispermodels\*.bin" Condition="Exists('..\..\whispermodels')">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-            <Link>whispermodels\%(Filename)%(Extension)</Link>
-        </None>
-    </ItemGroup>
+    <!-- Whisper models now come automatically from Core project -->
+    <!-- No need to include them manually here anymore -->
 
     <!-- 
         Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging

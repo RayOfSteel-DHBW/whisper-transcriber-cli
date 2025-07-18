@@ -9,6 +9,13 @@ namespace WhisperTranscriberCLI.Core.Services;
 
 public class SystemCheckService
 {
+    private readonly ModelDiscovery _modelDiscovery;
+
+    public SystemCheckService()
+    {
+        _modelDiscovery = new ModelDiscovery();
+    }
+
     public async Task<SystemCheckResult> CheckSystemRequirementsAsync()
     {
         var result = new SystemCheckResult();
@@ -16,7 +23,7 @@ public class SystemCheckService
         // Check FFmpeg availability
         result.FFmpegAvailable = await CheckFFmpegAsync();
         
-        // Check whisper models
+        // Check whisper models using ModelDiscovery
         result.WhisperModelsAvailable = CheckWhisperModels();
         
         // Check .NET runtime
@@ -54,8 +61,9 @@ public class SystemCheckService
             
             return process.ExitCode == 0;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Debug.WriteLine($"Failed to check FFmpeg availability: {ex}");
             return false;
         }
     }
@@ -64,15 +72,17 @@ public class SystemCheckService
     {
         try
         {
-            var modelDir = Path.Combine(Directory.GetCurrentDirectory(), "whispermodels");
-            if (!Directory.Exists(modelDir))
-                return false;
-                
-            var modelFiles = Directory.GetFiles(modelDir, "*.bin");
-            return modelFiles.Length > 0;
+            // Use ModelDiscovery to check for models consistently
+            var models = _modelDiscovery.GetAvailableModels();
+            var hasModels = models.Count > 0;
+            
+            Debug.WriteLine($"SystemCheckService: Found {models.Count} models in directory: {_modelDiscovery.ModelDirectory}");
+            
+            return hasModels;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Debug.WriteLine($"Failed to check Whisper models: {ex}");
             return false;
         }
     }
@@ -85,8 +95,9 @@ public class SystemCheckService
             var version = Environment.Version;
             return version.Major >= 8;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Debug.WriteLine($"Failed to check .NET runtime: {ex}");
             return false;
         }
     }
@@ -101,8 +112,9 @@ public class SystemCheckService
             // Check if we have at least 1GB of free space
             return driveInfo.AvailableFreeSpace > 1024 * 1024 * 1024;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Debug.WriteLine($"Failed to check disk space: {ex}");
             return true; // Assume OK if we can't check
         }
     }
@@ -121,15 +133,26 @@ public class SystemCheckService
     
     public string GetWhisperModelsInstructions()
     {
-        return "Whisper model files are required for transcription. Please:\n\n" +
+        var modelDir = _modelDiscovery.ModelDirectory;
+        var instructions = "Whisper model files are required for transcription. Please:\n\n" +
                "1. Download Whisper model files (.bin format) from:\n" +
                "   https://huggingface.co/ggerganov/whisper.cpp/tree/main\n" +
-               "2. Place the model files in the 'whispermodels' folder\n" +
+               "2. Place the model files in the models folder\n" +
                "3. Recommended models:\n" +
                "   • ggml-base.bin (good balance of speed/accuracy)\n" +
                "   • ggml-small.bin (faster)\n" +
-               "   • ggml-large-v3.bin (most accurate)\n\n" +
-               "The application will create the whispermodels folder if it doesn't exist.";
+               "   • ggml-large-v3.bin (most accurate)\n\n";
+
+        if (!string.IsNullOrEmpty(modelDir))
+        {
+            instructions += $"Current models directory: {modelDir}";
+        }
+        else
+        {
+            instructions += "Use the Settings button to configure the models directory.";
+        }
+
+        return instructions;
     }
 }
 

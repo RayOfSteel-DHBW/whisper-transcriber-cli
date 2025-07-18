@@ -31,10 +31,24 @@ public sealed partial class MainPage : Page
     private readonly SystemTrayService _systemTrayService;
     private QueueManager? _queueManager;
     private bool _isInitialized = false;
+
+    private static void LogError(string message)
+    {
+        // Use both Debug.WriteLine (for Visual Studio) and Console.WriteLine (for standalone)
+        Debug.WriteLine(message);
+        try 
+        { 
+            Console.WriteLine(message); 
+        } 
+        catch 
+        { 
+            // Ignore console errors in WinUI apps
+        }
+    }
     
     public MainPage()
     {
-        this.InitializeComponent();
+        InitializeComponent();
         _modelDiscovery = new ModelDiscovery();
         _audioDurationService = new AudioDurationService();
         _settingsService = new SettingsService();
@@ -51,7 +65,22 @@ public sealed partial class MainPage : Page
         
         _isInitialized = true;
         
-        _ = CheckSystemRequirementsAsync();
+        // Don't run system checks here - wait until page is loaded
+        Loaded += MainPage_Loaded;
+    }
+
+    private async void MainPage_Loaded(object sender, RoutedEventArgs e)
+    {
+        // Now XamlRoot is available, safe to show dialogs
+        try
+        {
+            await CheckSystemRequirementsAsync();
+        }
+        catch (Exception ex)
+        {
+            LogError($"Error during system check: {ex}");
+            UpdateStatus($"System check failed: {ex.Message}");
+        }
     }
 
     private void LoadModels()
@@ -73,6 +102,11 @@ public sealed partial class MainPage : Page
             {
                 ModelComboBox.SelectedIndex = 0;
             }
+        }
+        else if (_modelDiscovery.NeedsModelPathSetup)
+        {
+            // No models found, will prompt user during initialization
+            ModelComboBox.PlaceholderText = "No models - setup required";
         }
     }
 
@@ -108,7 +142,7 @@ public sealed partial class MainPage : Page
         // Set the app theme to follow system theme
         if (App.MainWindow.Content is FrameworkElement rootElement)
         {
-            rootElement.RequestedTheme = Microsoft.UI.Xaml.ElementTheme.Default;
+            rootElement.RequestedTheme = ElementTheme.Default;
         }
     }
 
@@ -117,85 +151,184 @@ public sealed partial class MainPage : Page
         try
         {
             UpdateStatus("Checking system requirements...");
+            
             var result = await _systemCheckService.CheckSystemRequirementsAsync();
+            
+            // Check if model setup is needed BEFORE checking system requirements
+            if (_modelDiscovery.NeedsModelPathSetup)
+            {
+                UpdateStatus("Models setup required...");
+                LogError($"Model setup needed - ModelDirectory: '{_modelDiscovery.ModelDirectory}', NeedsSetup: {_modelDiscovery.NeedsModelPathSetup}");
+                
+                try
+                {
+                    var modelSetupService = new ModelSetupService(App.MainWindow);
+                    var setupComplete = await modelSetupService.ShowModelSetupDialogAsync();
+                    
+                    if (!setupComplete)
+                    {
+                        UpdateStatus("Model setup cancelled - some features will be unavailable");
+                        LogError("User cancelled model setup");
+                    }
+                    else
+                    {
+                        // Reload models after setup
+                        LoadModels();
+                        UpdateStatus("Models setup complete!");
+                        LogError("Model setup completed successfully");
+                        
+                        // Re-check system requirements after model setup
+                        result = await _systemCheckService.CheckSystemRequirementsAsync();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    UpdateStatus($"Model setup failed: {ex.Message}");
+                    LogError($"Model setup error: {ex}");
+                    await ShowErrorDialogAsync("Model Setup Error", 
+                        $"Failed to configure Whisper models: {ex.Message}\n\nTranscription features may not work correctly.");
+                }
+            }
+            else
+            {
+                LogError($"Model setup not needed - ModelDirectory: '{_modelDiscovery.ModelDirectory}', Found {_modelDiscovery.GetAvailableModels().Count} models");
+            }
             
             if (result.IsSystemReady)
             {
                 UpdateStatus("System ready for transcription");
+                LogError("System check passed - all requirements met");
             }
             else
             {
                 UpdateStatus(result.GetStatusMessage());
+                LogError($"System check failed: {result.GetStatusMessage()}");
                 await ShowSystemRequirementsDialog(result);
             }
         }
         catch (Exception ex)
         {
-            UpdateStatus($"System check failed: {ex.Message}");
+            var errorMessage = $"System check failed: {ex.Message}";
+            UpdateStatus(errorMessage);
+            LogError($"CheckSystemRequirementsAsync error: {ex}");
+            await ShowErrorDialogAsync("System Check Error", 
+                $"An unexpected error occurred during system initialization:\n\n{ex.Message}\n\nSome features may not work correctly.");
+        }
+    }
+
+    private async Task ShowErrorDialogAsync(string title, string message)
+    {
+        try
+        {
+            // Ensure we have XamlRoot before showing dialog
+            if (XamlRoot == null)
+            {
+                LogError($"Cannot show dialog '{title}' - XamlRoot is null. Message: {message}");
+                UpdateStatus($"Error: {message}");
+                return;
+            }
+
+            var errorDialog = new ContentDialog
+            {
+                Title = title,
+                Content = new ScrollViewer
+                {
+                    Content = new TextBlock
+                    {
+                        Text = message,
+                        TextWrapping = TextWrapping.Wrap,
+                        IsTextSelectionEnabled = true
+                    }
+                },
+                CloseButtonText = "OK",
+                XamlRoot = XamlRoot
+            };
+
+            await errorDialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            // If we can't even show an error dialog, write to debug output
+            LogError($"Failed to show error dialog '{title}': {ex.Message}");
+            UpdateStatus($"Error: {message}");
         }
     }
 
     private async Task ShowSystemRequirementsDialog(SystemCheckResult result)
     {
-        var content = new StackPanel { Spacing = 12 };
-        
-        content.Children.Add(new TextBlock
+        try
         {
-            Text = "System Requirements Check",
-            FontSize = 18,
-            FontWeight = Microsoft.UI.Text.FontWeights.Bold
-        });
-        
-        content.Children.Add(new TextBlock
-        {
-            Text = result.GetStatusMessage(),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-        
-        if (!result.FFmpegAvailable)
-        {
+            // Ensure we have XamlRoot before showing dialog
+            if (XamlRoot == null)
+            {
+                LogError("Cannot show system requirements dialog - XamlRoot is null");
+                return;
+            }
+
+            var content = new StackPanel { Spacing = 12 };
+            
             content.Children.Add(new TextBlock
             {
-                Text = "FFmpeg Installation:",
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+                Text = "System Requirements Check",
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.Bold
             });
+            
             content.Children.Add(new TextBlock
             {
-                Text = _systemCheckService.GetFFmpegInstallationInstructions(),
+                Text = result.GetStatusMessage(),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
             });
-        }
-        
-        if (!result.WhisperModelsAvailable)
-        {
-            content.Children.Add(new TextBlock
+            
+            if (!result.FFmpegAvailable)
             {
-                Text = "Whisper Models:",
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-            });
-            content.Children.Add(new TextBlock
+                content.Children.Add(new TextBlock
+                {
+                    Text = "FFmpeg Installation:",
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+                });
+                content.Children.Add(new TextBlock
+                {
+                    Text = _systemCheckService.GetFFmpegInstallationInstructions(),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+            }
+            
+            if (!result.WhisperModelsAvailable)
             {
-                Text = _systemCheckService.GetWhisperModelsInstructions(),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 8)
-            });
+                content.Children.Add(new TextBlock
+                {
+                    Text = "Whisper Models:",
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+                });
+                content.Children.Add(new TextBlock
+                {
+                    Text = _systemCheckService.GetWhisperModelsInstructions(),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+            }
+
+            var dialog = new ContentDialog
+            {
+                Title = "System Requirements",
+                Content = new ScrollViewer { Content = content },
+                PrimaryButtonText = "Check Again",
+                CloseButtonText = "Continue Anyway",
+                XamlRoot = XamlRoot
+            };
+
+            var dialogResult = await dialog.ShowAsync();
+            if (dialogResult == ContentDialogResult.Primary)
+            {
+                await CheckSystemRequirementsAsync();
+            }
         }
-
-        var dialog = new ContentDialog
+        catch (Exception ex)
         {
-            Title = "System Requirements",
-            Content = new ScrollViewer { Content = content },
-            PrimaryButtonText = "Check Again",
-            CloseButtonText = "Continue Anyway",
-            XamlRoot = this.XamlRoot
-        };
-
-        var dialogResult = await dialog.ShowAsync();
-        if (dialogResult == ContentDialogResult.Primary)
-        {
-            await CheckSystemRequirementsAsync();
+            LogError($"Failed to show system requirements dialog: {ex.Message}");
         }
     }
 
@@ -212,10 +345,17 @@ public sealed partial class MainPage : Page
             _queueManager.TaskFailed += OnTaskFailed;
             
             LoadExistingTasks();
+            UpdateStatus("Queue manager initialized successfully");
         }
         catch (Exception ex)
         {
-            UpdateStatus($"Failed to initialize queue manager: {ex.Message}");
+            var errorMessage = $"Failed to initialize queue manager: {ex.Message}";
+            UpdateStatus(errorMessage);
+            LogError($"QueueManager initialization error: {ex}");
+            
+            // Show error dialog asynchronously
+            _ = ShowErrorDialogAsync("Queue Manager Error", 
+                $"Failed to initialize the transcription queue:\n\n{ex.Message}\n\nQueue operations may not work correctly.");
         }
     }
 
@@ -239,88 +379,184 @@ public sealed partial class MainPage : Page
         }
         catch (Exception ex)
         {
-            UpdateStatus($"Failed to reinitialize queue manager: {ex.Message}");
+            var errorMessage = $"Failed to reinitialize queue manager: {ex.Message}";
+            UpdateStatus(errorMessage);
+            LogError($"QueueManager reinitialization error: {ex}");
+            
+            // Show error dialog asynchronously
+            _ = ShowErrorDialogAsync("Queue Manager Error", 
+                $"Failed to update queue manager settings:\n\n{ex.Message}\n\nThe previous settings will remain active.");
         }
     }
 
     private void LoadExistingTasks()
     {
-        if (_queueManager != null)
+        try
         {
-            _tasks.Clear();
-            foreach (var task in _queueManager.Queue.Tasks)
+            if (_queueManager != null)
             {
-                _tasks.Add(new TaskViewModel(task));
+                _tasks.Clear();
+                foreach (var task in _queueManager.Queue.Tasks)
+                {
+                    _tasks.Add(new TaskViewModel(task));
+                }
+                UpdateStatus($"Loaded {_tasks.Count} existing tasks from queue");
             }
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = $"Failed to load existing tasks: {ex.Message}";
+            UpdateStatus(errorMessage);
+            LogError($"LoadExistingTasks error: {ex}");
         }
     }
 
     private async void AddFilesButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker();
-        picker.ViewMode = PickerViewMode.List;
-        picker.FileTypeFilter.Add(".mp3");
-        picker.FileTypeFilter.Add(".wav");
-        picker.FileTypeFilter.Add(".mp4");
-        picker.FileTypeFilter.Add(".avi");
-        picker.FileTypeFilter.Add(".mkv");
-        picker.FileTypeFilter.Add(".m4a");
-        picker.FileTypeFilter.Add(".flac");
-        picker.FileTypeFilter.Add(".ogg");
-        picker.FileTypeFilter.Add(".webm");
-        picker.FileTypeFilter.Add(".wma");
-
-        var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
-        InitializeWithWindow.Initialize(picker, hwnd);
-
-        var files = await picker.PickMultipleFilesAsync();
-        if (files != null && files.Count > 0)
+        try
         {
-            await AddFilesToQueue(files.Select(f => f.Path));
+            var picker = new FileOpenPicker();
+            picker.ViewMode = PickerViewMode.List;
+            picker.FileTypeFilter.Add(".mp3");
+            picker.FileTypeFilter.Add(".wav");
+            picker.FileTypeFilter.Add(".mp4");
+            picker.FileTypeFilter.Add(".avi");
+            picker.FileTypeFilter.Add(".mkv");
+            picker.FileTypeFilter.Add(".m4a");
+            picker.FileTypeFilter.Add(".flac");
+            picker.FileTypeFilter.Add(".ogg");
+            picker.FileTypeFilter.Add(".webm");
+            picker.FileTypeFilter.Add(".wma");
+
+            var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
+            InitializeWithWindow.Initialize(picker, hwnd);
+
+            var files = await picker.PickMultipleFilesAsync();
+            if (files != null && files.Count > 0)
+            {
+                await AddFilesToQueue(files.Select(f => f.Path));
+            }
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = $"Failed to add files: {ex.Message}";
+            UpdateStatus(errorMessage);
+            LogError($"AddFilesButton_Click error: {ex}");
+            
+            await ShowErrorDialogAsync("File Selection Error", 
+                $"An error occurred while selecting files:\n\n{ex.Message}");
         }
     }
 
     private async void AddFolderButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FolderPicker();
-        picker.ViewMode = PickerViewMode.List;
-
-        var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
-        InitializeWithWindow.Initialize(picker, hwnd);
-
-        var folder = await picker.PickSingleFolderAsync();
-        if (folder != null)
+        try
         {
-            await AddFolderToQueue(folder.Path);
+            var picker = new FolderPicker();
+            picker.ViewMode = PickerViewMode.Thumbnail; // Better for seeing file contents
+            picker.SuggestedStartLocation = PickerLocationId.MusicLibrary; // More appropriate for audio files
+            
+            // FolderPicker requires at least one file type filter in WinUI 3
+            // Add the supported audio/video formats to help with filtering
+            picker.FileTypeFilter.Add(".mp3");
+            picker.FileTypeFilter.Add(".wav");
+            picker.FileTypeFilter.Add(".mp4");
+            picker.FileTypeFilter.Add(".avi");
+            picker.FileTypeFilter.Add(".mkv");
+            picker.FileTypeFilter.Add(".m4a");
+            picker.FileTypeFilter.Add(".flac");
+            picker.FileTypeFilter.Add(".ogg");
+            picker.FileTypeFilter.Add(".webm");
+            picker.FileTypeFilter.Add(".wma");
+            picker.FileTypeFilter.Add("*"); // Fallback for all files
+
+            var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
+            InitializeWithWindow.Initialize(picker, hwnd);
+
+            var folder = await picker.PickSingleFolderAsync();
+            if (folder != null)
+            {
+                await AddFolderToQueue(folder.Path);
+            }
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = $"Failed to add folder: {ex.Message}";
+            UpdateStatus(errorMessage);
+            LogError($"AddFolderButton_Click error: {ex}");
+            
+            await ShowErrorDialogAsync("Folder Selection Error", 
+                $"An error occurred while selecting a folder:\n\n{ex.Message}");
         }
     }
 
-    private async Task AddFilesToQueue(System.Collections.Generic.IEnumerable<string> filePaths)
+    private async Task AddFilesToQueue(IEnumerable<string> filePaths)
     {
-        var selectedModel = ModelComboBox.SelectedValue?.ToString() ?? "ggml-base.bin";
-        var selectedLanguage = (LanguageComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "auto";
-        var outputDirectory = OutputDirectoryTextBox.Text;
-
-        foreach (var filePath in filePaths)
+        try
         {
-            UpdateStatus($"Analyzing {Path.GetFileName(filePath)}...");
-            var duration = await _audioDurationService.GetDurationAsync(filePath);
-            var formattedDuration = _audioDurationService.FormatDuration(duration);
-            
-            var task = new TranscriptionTask
+            if (_queueManager == null)
             {
-                FilePath = filePath,
-                ModelName = selectedModel,
-                Language = selectedLanguage,
-                Duration = formattedDuration,
-                Status = Core.Models.TaskStatus.Pending
-            };
+                UpdateStatus("Queue manager not available");
+                await ShowErrorDialogAsync("Queue Error", "The queue manager is not available. Try restarting the application.");
+                return;
+            }
 
-            await _queueManager!.AddTaskAsync(task);
-            _tasks.Add(new TaskViewModel(task));
+            var selectedModel = ModelComboBox.SelectedValue?.ToString() ?? "ggml-base.bin";
+            var selectedLanguage = (LanguageComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "auto";
+            var outputDirectory = OutputDirectoryTextBox.Text;
+
+            int added = 0;
+            int failed = 0;
+
+            foreach (var filePath in filePaths)
+            {
+                try
+                {
+                    UpdateStatus($"Analyzing {Path.GetFileName(filePath)}...");
+                    var duration = await _audioDurationService.GetDurationAsync(filePath);
+                    var formattedDuration = _audioDurationService.FormatDuration(duration);
+                    
+                    var task = new TranscriptionTask
+                    {
+                        FilePath = filePath,
+                        ModelName = selectedModel,
+                        Language = selectedLanguage,
+                        Duration = formattedDuration,
+                        Status = Core.Models.TaskStatus.Pending
+                    };
+
+                    await _queueManager.AddTaskAsync(task);
+                    _tasks.Add(new TaskViewModel(task));
+                    added++;
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    Debug.WriteLine($"Failed to add file {filePath}: {ex.Message}");
+                    UpdateStatus($"Failed to add {Path.GetFileName(filePath)}: {ex.Message}");
+                }
+            }
+
+            if (added > 0)
+            {
+                UpdateStatus($"Added {added} files to queue" + (failed > 0 ? $" ({failed} failed)" : ""));
+            }
+            
+            if (failed > 0 && added == 0)
+            {
+                await ShowErrorDialogAsync("Add Files Error", 
+                    $"Failed to add {failed} file(s) to the queue. Check that the files are accessible and in a supported format.");
+            }
         }
-
-        UpdateStatus($"Added {filePaths.Count()} files to queue");
+        catch (Exception ex)
+        {
+            var errorMessage = $"Failed to add files to queue: {ex.Message}";
+            UpdateStatus(errorMessage);
+            LogError($"AddFilesToQueue error: {ex}");
+            
+            await ShowErrorDialogAsync("Queue Operation Error", 
+                $"An error occurred while adding files to the queue:\n\n{ex.Message}");
+        }
     }
 
     private async Task AddFolderToQueue(string folderPath)
@@ -410,7 +646,11 @@ public sealed partial class MainPage : Page
     private async void BrowseOutputButton_Click(object sender, RoutedEventArgs e)
     {
         var picker = new FolderPicker();
-        picker.ViewMode = PickerViewMode.List;
+        picker.ViewMode = PickerViewMode.List; // List view is fine for output directory selection
+        picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+        
+        // FolderPicker requires at least one file type filter in WinUI 3
+        picker.FileTypeFilter.Add("*");
 
         var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
         InitializeWithWindow.Initialize(picker, hwnd);
@@ -461,9 +701,26 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        ShowSettingsPage();
+        try
+        {
+            var modelSetupService = new ModelSetupService(App.MainWindow);
+            var setupComplete = await modelSetupService.ShowModelSetupDialogAsync();
+            
+            if (setupComplete)
+            {
+                // Reload models after setup
+                LoadModels();
+                UpdateStatus("Models configuration updated!");
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus($"Settings error: {ex.Message}");
+            await ShowErrorDialogAsync("Settings Error", 
+                $"An error occurred while opening settings:\n\n{ex.Message}");
+        }
     }
 
     private async void AboutButton_Click(object sender, RoutedEventArgs e)
@@ -545,7 +802,7 @@ public sealed partial class MainPage : Page
                 }
             },
             CloseButtonText = "Close",
-            XamlRoot = this.XamlRoot
+            XamlRoot = XamlRoot
         };
 
         await aboutDialog.ShowAsync();
@@ -718,6 +975,7 @@ public sealed partial class MainPage : Page
             catch (Exception ex)
             {
                 UpdateStatus($"Failed to open output: {ex.Message}");
+                LogError($"OpenOutputMenuItem_Click error: {ex}");
             }
         }
     }
@@ -739,6 +997,7 @@ public sealed partial class MainPage : Page
             catch (Exception ex)
             {
                 UpdateStatus($"Failed to open folder: {ex.Message}");
+                LogError($"OpenFolderMenuItem_Click error: {ex}");
             }
         }
     }
@@ -791,7 +1050,7 @@ public sealed partial class MainPage : Page
                     }
                 },
                 CloseButtonText = "Close",
-                XamlRoot = this.XamlRoot
+                XamlRoot = XamlRoot
             };
 
             await dialog.ShowAsync();
@@ -859,7 +1118,7 @@ public sealed partial class MainPage : Page
     // Drag and drop handlers
     private void TaskListView_DragOver(object sender, DragEventArgs e)
     {
-        e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+        e.AcceptedOperation = DataPackageOperation.Copy;
         
         if (e.DragUIOverride != null)
         {
@@ -873,7 +1132,7 @@ public sealed partial class MainPage : Page
     {
         try
         {
-            if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+            if (e.DataView.Contains(StandardDataFormats.StorageItems))
             {
                 var items = await e.DataView.GetStorageItemsAsync();
                 var filePaths = new List<string>();
@@ -911,6 +1170,7 @@ public sealed partial class MainPage : Page
         catch (Exception ex)
         {
             UpdateStatus($"Error processing dropped files: {ex.Message}");
+            LogError($"TaskListView_Drop error: {ex}");
         }
     }
 
@@ -937,6 +1197,7 @@ public sealed partial class MainPage : Page
         catch (Exception ex)
         {
             UpdateStatus($"Error processing folder {folder.Name}: {ex.Message}");
+            LogError($"ProcessDroppedFolderAsync error: {ex}");
         }
     }
 
@@ -1003,6 +1264,7 @@ public sealed partial class MainPage : Page
         catch (Exception ex)
         {
             UpdateStatus($"Failed to open output file: {ex.Message}");
+            LogError($"OpenOutputFileAsync error: {ex}");
         }
     }
 }

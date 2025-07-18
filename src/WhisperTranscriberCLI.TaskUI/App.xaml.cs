@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+housing Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using WhisperTranscriberCLI.TaskUI.Views;
@@ -21,7 +21,12 @@ namespace WhisperTranscriberCLI.TaskUI
         /// </summary>
         public App()
         {
-            this.InitializeComponent();
+            InitializeComponent();
+            
+#if DEBUG
+            // Enable immediate debug output flushing
+            System.Diagnostics.Debug.AutoFlush = true;
+#endif
         }
 
         /// <summary>
@@ -65,7 +70,7 @@ namespace WhisperTranscriberCLI.TaskUI
             }
             
             // Normal close behavior
-            this.Exit();
+            Exit();
         }
 
         /// <summary>

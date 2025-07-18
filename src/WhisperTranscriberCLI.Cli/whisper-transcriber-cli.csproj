@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -14,7 +14,17 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>link</TrimMode>
-    <Configurations>Debug;Release;DeployDebug</Configurations>
+    <Configurations>Debug;Release;LocalTest</Configurations>
+  </PropertyGroup>
+
+  <!-- LocalTest Configuration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'LocalTest'">
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>true</Optimize>
+    <DefineConstants>TRACE;LOCALTEST</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -37,13 +47,15 @@
     <ResolvedFileToPublish Remove="**/*.so" />
   </ItemGroup>
 
-  <!-- Include whisper models in publish output but exclude from single-file bundle -->
-  <ItemGroup>
-    <None Include="..\..\whispermodels\*.bin" Condition="Exists('..\..\whispermodels')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-    </None>
-  </ItemGroup>
+  <!-- Whisper models come from Core project automatically -->
+  <!-- Ensure .bin files are not bundled into single-file executable -->
+  <Target Name="ExcludeWhisperModelsFromSingleFile" BeforeTargets="GenerateSingleFileBundle">
+    <ItemGroup>
+      <FilesToExcludeFromSingleFile Include="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.bin'" />
+      <ResolvedFileToPublish Update="@(FilesToExcludeFromSingleFile)">
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 
 </Project>

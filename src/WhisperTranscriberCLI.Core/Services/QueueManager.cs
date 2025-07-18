@@ -201,15 +201,28 @@ public class QueueManager : IDisposable
     {
         try
         {
-            var json = JsonSerializer.Serialize(_queue, new JsonSerializerOptions
+            // Ensure directory exists
+            var directory = Path.GetDirectoryName(_queueFilePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
             {
-                WriteIndented = true
-            });
+                Directory.CreateDirectory(directory);
+            }
+
+            // Use source generator for JSON serialization
+            var json = JsonSerializer.Serialize(_queue, TranscriptionQueueJsonContext.Default.TranscriptionQueue);
             await File.WriteAllTextAsync(_queueFilePath, json);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to save queue: {ex.Message}");
+            // Log to debug output but don't crash the app
+            System.Diagnostics.Debug.WriteLine($"Failed to save queue: {ex.Message}");
+            // Also try to notify via StatusChanged if possible
+            StatusChanged?.Invoke(this, new TranscriptionStatusEventArgs
+            {
+                TaskId = "system",
+                Status = Models.TaskStatus.Error,
+                ErrorMessage = $"Failed to save queue: {ex.Message}"
+            });
         }
     }
 
@@ -220,12 +233,17 @@ public class QueueManager : IDisposable
             if (File.Exists(_queueFilePath))
             {
                 var json = File.ReadAllText(_queueFilePath);
-                _queue = JsonSerializer.Deserialize<TranscriptionQueue>(json) ?? new TranscriptionQueue();
+                var loadedQueue = JsonSerializer.Deserialize(json, TranscriptionQueueJsonContext.Default.TranscriptionQueue);
+                _queue = loadedQueue ?? new TranscriptionQueue();
+            }
+            else
+            {
+                _queue = new TranscriptionQueue();
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to load queue: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Failed to load queue: {ex.Message}");
             _queue = new TranscriptionQueue();
         }
     }
@@ -238,7 +256,7 @@ public class QueueManager : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Auto-save failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Auto-save failed: {ex.Message}");
         }
     }
 

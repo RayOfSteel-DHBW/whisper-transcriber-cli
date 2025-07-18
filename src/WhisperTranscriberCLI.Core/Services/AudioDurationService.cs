@@ -7,6 +7,20 @@ namespace WhisperTranscriberCLI.Core.Services;
 
 public class AudioDurationService
 {
+    private static void LogError(string message)
+    {
+        // Use both Debug.WriteLine (for Visual Studio) and Console.WriteLine (for standalone)
+        System.Diagnostics.Debug.WriteLine(message);
+        try 
+        { 
+            Console.WriteLine(message); 
+        } 
+        catch 
+        { 
+            // Ignore console errors in WinUI apps
+        }
+    }
+
     public async Task<TimeSpan> GetDurationAsync(string filePath)
     {
         try
@@ -19,9 +33,10 @@ public class AudioDurationService
             var mediaInfo = await FFProbe.AnalyseAsync(filePath);
             return mediaInfo.Duration;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // If FFmpeg analysis fails, return zero duration
+            LogError($"Failed to analyze audio duration for {filePath}: {ex.Message}");
             return TimeSpan.Zero;
         }
     }
