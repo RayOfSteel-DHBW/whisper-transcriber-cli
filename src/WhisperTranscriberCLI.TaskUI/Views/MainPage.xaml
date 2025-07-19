@@ -185,6 +185,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             
             <!-- Loading indicator for when models are being loaded -->
@@ -192,6 +193,24 @@
             
             <!-- Status text -->
             <TextBlock x:Name="StatusTextBlock" Grid.Column="1" Text="Ready" VerticalAlignment="Center"/>
+            
+            <!-- GPU Status (right-aligned) -->
+            <StackPanel x:Name="GpuStatusPanel" Grid.Column="2" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+                <!-- Main status display with inline indicators -->
+                <Border x:Name="GpuStatusBorder" Background="{ThemeResource SystemControlBackgroundChromeMediumBrush}" 
+                        BorderBrush="{ThemeResource SystemControlForegroundBaseMediumLowBrush}" BorderThickness="1"
+                        CornerRadius="3" Padding="8,4" ToolTipService.ToolTip="Click for detailed GPU information"
+                        PointerPressed="GpuStatusBorder_PointerPressed">
+                    <!-- Status text with inline indicators after each metric -->
+                    <TextBlock x:Name="GpuStatusText" Text="GPU | Load: --% | Temp: --°C | VRAM -- / -- GB" 
+                               FontSize="11" VerticalAlignment="Center"/>
+                </Border>
+                
+                <!-- Critical warning text (only shown for serious issues) -->
+                <TextBlock x:Name="GpuCriticalAdviceText" Text="" FontSize="11" VerticalAlignment="Center" 
+                           Foreground="{ThemeResource SystemFillColorCriticalBrush}" Visibility="Collapsed"
+                           FontWeight="SemiBold"/>
+            </StackPanel>
         </Grid>
     </Grid>
 </Page>

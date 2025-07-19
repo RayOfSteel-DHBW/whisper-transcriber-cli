@@ -48,6 +48,7 @@ namespace WhisperTranscriberCLI.TaskUI
                     
                     // Register TaskUI services
                     services.AddSingleton<SettingsService>();
+                    services.AddSingleton<GpuMonitoringService>();
                     // ModelSetupService removed - requires Window which isn't available at DI build time
                     
                     // Register MainPage with DI

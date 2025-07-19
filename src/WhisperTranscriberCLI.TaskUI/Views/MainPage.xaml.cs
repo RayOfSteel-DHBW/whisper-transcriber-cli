@@ -31,6 +31,7 @@ public sealed partial class MainPage : Page
     private readonly AudioDurationService _audioDurationService;
     private readonly SettingsService _settingsService;
     private readonly SystemCheckService _systemCheckService;
+    private readonly GpuMonitoringService _gpuMonitoringService;
     private readonly ILogger<MainPage> _logger;
     private SystemTrayService _systemTrayService = null!;
     private QueueManager? _queueManager;
@@ -46,6 +47,7 @@ public sealed partial class MainPage : Page
         _systemCheckService = App.Services?.GetService<SystemCheckService>() ?? CreateFallbackSystemCheckService();
         _modelDiscovery = App.Services?.GetService<ModelDiscovery>() ?? CreateFallbackModelDiscovery();
         _audioDurationService = App.Services?.GetService<AudioDurationService>() ?? new AudioDurationService();
+        _gpuMonitoringService = App.Services?.GetService<GpuMonitoringService>() ?? new GpuMonitoringService();
         
         SetupPage();
     }
@@ -64,6 +66,7 @@ public sealed partial class MainPage : Page
         _systemCheckService = systemCheckService;
         _modelDiscovery = modelDiscovery;
         _audioDurationService = audioDurationService;
+        _gpuMonitoringService = App.Services?.GetService<GpuMonitoringService>() ?? new GpuMonitoringService();
         
         SetupPage();
     }
@@ -90,6 +93,7 @@ public sealed partial class MainPage : Page
         try
         {
             await CheckSystemRequirementsAsync();
+            await InitializeGpuMonitoringAsync();
         }
         catch (Exception ex)
         {
@@ -123,6 +127,93 @@ public sealed partial class MainPage : Page
             // No models found, will prompt user during initialization
             ModelComboBox.PlaceholderText = "No models - setup required";
         }
+        
+        // Apply GPU-based model filtering if GPU monitoring is available
+        if (_gpuMonitoringService.IsGpuAvailable && _gpuMonitoringService.CurrentStatus != null)
+        {
+            UpdateModelAvailability(_gpuMonitoringService.CurrentStatus);
+        }
+    }
+
+    private void UpdateModelAvailability(GpuStatus status)
+    {
+        try
+        {
+            var models = ModelComboBox.ItemsSource as List<ModelInfo>;
+            if (models == null) return;
+            
+            // Check current acceleration mode - this is the key fix!
+            var useGpu = _settingsService.Settings.UseGpu;
+            var hasRealGpu = status.IsRealGpu();
+            
+            _logger.LogDebug("Model availability check - Mode: {Mode}, GPU Available: {HasGpu}, Real GPU: {IsReal}", 
+                useGpu ? "GPU" : "CPU", _gpuMonitoringService.IsGpuAvailable, hasRealGpu);
+            
+            foreach (var model in models)
+            {
+                if (useGpu && hasRealGpu)
+                {
+                    // GPU mode: check VRAM requirements
+                    var canRunOnGpu = status.HasSufficientVramForModel(model.Name);
+                    var requiredVramMB = GetModelVramRequirement(model.Name);
+                    var requiredVramGB = Math.Ceiling(requiredVramMB * 1.2 / 1024.0); // With safety factor
+                    var availableVramGB = Math.Round(status.MemoryTotalMB / 1024.0, 1);
+                    
+                    if (!canRunOnGpu)
+                    {
+                        _logger.LogInformation("Model {ModelName} may not fit in GPU VRAM ({RequiredVramGB}GB required, {AvailableVramGB}GB available)", 
+                            model.Name, requiredVramGB, availableVramGB);
+                      }
+                      else
+                      {
+                        _logger.LogDebug("Model {ModelName} should fit in GPU VRAM ({RequiredVramGB}GB required, {AvailableVramGB}GB available)",
+                            model.Name, requiredVramGB, availableVramGB);
+                      }
+                }
+                else
+                {
+                    // CPU mode: ALL models are available regardless of GPU VRAM
+                    // Only system RAM matters, and we assume it's sufficient for Whisper models
+                    _logger.LogDebug("Model {ModelName} available in CPU mode (using system RAM)", model.Name);
+                }
+            }
+            
+            // Log summary
+            if (!useGpu)
+            {
+                _logger.LogInformation("CPU mode selected - all {ModelCount} models available using system RAM", models.Count);
+            }
+            else if (hasRealGpu)
+            {
+                var compatibleModels = models.Count(m => status.HasSufficientVramForModel(m.Name));
+                _logger.LogInformation("GPU mode selected - {CompatibleCount}/{TotalCount} models fit in {AvailableVramGB}GB VRAM", 
+                    compatibleModels, models.Count, Math.Round(status.MemoryTotalMB / 1024.0, 1));
+            }
+            else
+            {
+                _logger.LogInformation("GPU mode selected but no real GPU detected - models may run slowly");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating model availability based on GPU status");
+        }
+    }
+    
+    private int GetModelVramRequirement(string modelName)
+    {
+        // Approximate VRAM requirements for different Whisper models (in MB)
+        return modelName.ToLower() switch
+        {
+            var name when name.Contains("large-v3") => 3072,    // ~3GB
+            var name when name.Contains("large-v2") => 3072,    // ~3GB
+            var name when name.Contains("large") => 3072,       // ~3GB
+            var name when name.Contains("medium") => 1536,      // ~1.5GB
+            var name when name.Contains("small") => 768,        // ~768MB
+            var name when name.Contains("base") => 512,         // ~512MB
+            var name when name.Contains("tiny") => 256,         // ~256MB
+            _ => 1024 // Default to 1GB for unknown models
+        };
     }
 
     private void LoadSettings()
@@ -874,10 +965,104 @@ public sealed partial class MainPage : Page
         if (e.AddedItems.Count > 0 && e.AddedItems[0] is ComboBoxItem selectedItem && _isInitialized)
         {
             var useGpu = selectedItem.Content.ToString() == "GPU";
+            
+            // Check if user is trying to select GPU when it's not available
+            if (useGpu && !selectedItem.IsEnabled)
+            {
+                // Show informative message and revert selection
+                _ = ShowGpuUnavailableMessageAsync();
+                
+                // Revert to CPU selection
+                var cpuItem = AccelerationComboBox.Items.Cast<ComboBoxItem>()
+                    .FirstOrDefault(item => item.Content.ToString() == "CPU");
+                if (cpuItem != null)
+                {
+                    AccelerationComboBox.SelectedItem = cpuItem;
+                }
+                return;
+            }
+            
+            // Check if GPU is available but not suitable (low VRAM, etc.)
+            if (useGpu && _gpuMonitoringService.CurrentStatus != null)
+            {
+                var status = _gpuMonitoringService.CurrentStatus;
+                if (!status.IsRealGpu())
+                {
+                    _ = ShowGpuNotSuitableMessageAsync("Integrated GPU detected - dedicated GPU with VRAM recommended for optimal performance");
+                    // Still allow selection but warn user
+                }
+            }
+            
             _settingsService.UpdateUseGpu(useGpu);
             
             // Reinitialize queue manager with new GPU setting
             ReinitializeQueueManager();
+            
+            // Update model availability based on new acceleration mode
+            if (_gpuMonitoringService.CurrentStatus != null)
+            {
+                UpdateModelAvailability(_gpuMonitoringService.CurrentStatus);
+            }
+        }
+    }
+    
+    private async Task ShowGpuUnavailableMessageAsync()
+    {
+        try
+        {
+            if (XamlRoot == null) return;
+            
+            var dialog = new ContentDialog
+            {
+                Title = "GPU Acceleration Unavailable",
+                Content = "No supported GPU detected - GPU acceleration is unavailable.\n\n" +
+                         "GPU acceleration requires:\n" +
+                         "• NVIDIA GPU with CUDA support\n" +
+                         "• Sufficient VRAM (1GB+ recommended)\n" +
+                         "• nvidia-smi driver tools\n\n" +
+                         "The application will continue using CPU acceleration.",
+                CloseButtonText = "OK",
+                XamlRoot = XamlRoot
+            };
+            
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error showing GPU unavailable message");
+        }
+    }
+    
+    private async Task ShowGpuNotSuitableMessageAsync(string message)
+    {
+        try
+        {
+            if (XamlRoot == null) return;
+            
+            var dialog = new ContentDialog
+            {
+                Title = "GPU Performance Warning",
+                Content = message + "\n\nGPU acceleration is enabled but may not provide optimal performance.",
+                CloseButtonText = "Continue Anyway",
+                SecondaryButtonText = "Use CPU Instead",
+                XamlRoot = XamlRoot
+            };
+            
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Secondary)
+            {
+                // User chose CPU instead
+                var cpuItem = AccelerationComboBox.Items.Cast<ComboBoxItem>()
+                    .FirstOrDefault(item => item.Content.ToString() == "CPU");
+                if (cpuItem != null)
+                {
+                    AccelerationComboBox.SelectedItem = cpuItem;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error showing GPU not suitable message");
         }
     }
 
@@ -1084,7 +1269,7 @@ public sealed partial class MainPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            // Hide loading indicator when task fails
+            // Hide loadingindicator when task fails
             StatusProgressRing.IsActive = false;
             StatusProgressRing.Visibility = Visibility.Collapsed;
             
@@ -1663,6 +1848,445 @@ public sealed partial class MainPage : Page
                 _logger.LogError(ex, "ResetErrorsButton_Click error");
                 await ShowErrorDialogAsync("Reset Errors Error", errorMessage);
             }
+        }
+    }
+
+    private async Task InitializeGpuMonitoringAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Initializing GPU monitoring");
+            
+            var gpuAvailable = await _gpuMonitoringService.InitializeAsync();
+            
+            if (gpuAvailable)
+            {
+                _logger.LogInformation("GPU monitoring available - starting monitoring");
+                
+                // Subscribe to GPU status changes
+                _gpuMonitoringService.GpuStatusChanged += OnGpuStatusChanged;
+                
+                // Start monitoring
+                _gpuMonitoringService.StartMonitoring(5); // Update every 5 seconds
+                
+                // Show GPU status panel
+                GpuStatusPanel.Visibility = Visibility.Visible;
+                
+                // Update acceleration dropdown and model availability
+                await UpdateAccelerationAvailability();
+            }
+            else
+            {
+                _logger.LogInformation("GPU monitoring not available - hiding GPU status");
+                GpuStatusPanel.Visibility = Visibility.Collapsed;
+                
+                // Configure GPU option as unavailable
+                SetGpuAccelerationUnavailable("No supported GPU detected");
+                
+                // Force CPU mode if GPU was selected
+                if (_settingsService.Settings.UseGpu)
+                {
+                    _logger.LogInformation("No GPU detected - forcing CPU acceleration mode");
+                    _settingsService.UpdateUseGpu(false);
+                    
+                    // Update UI to reflect CPU mode
+                    var cpuItem = AccelerationComboBox.Items.Cast<ComboBoxItem>()
+                        .FirstOrDefault(item => item.Content.ToString() == "CPU");
+                    if (cpuItem != null)
+                    {
+                        AccelerationComboBox.SelectedItem = cpuItem;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error initializing GPU monitoring");
+            GpuStatusPanel.Visibility = Visibility.Collapsed;
+            SetGpuAccelerationUnavailable("GPU initialization failed");
+        }
+    }
+    
+    private void SetGpuAccelerationUnavailable(string reason)
+    {
+        var gpuItem = AccelerationComboBox.Items.Cast<ComboBoxItem>()
+            .FirstOrDefault(item => item.Content.ToString()?.StartsWith("GPU") == true);
+        
+        if (gpuItem != null)
+        {
+            gpuItem.IsEnabled = false;
+            gpuItem.Content = "GPU (Not Available)";
+            ToolTipService.SetToolTip(gpuItem, reason);
+        }
+    }
+    
+    private void OnGpuStatusChanged(object? sender, GpuStatusEventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            try
+            {
+                UpdateGpuStatusDisplay(e.Status);
+                UpdateModelRecommendations(e.Status);
+                UpdateAccelerationRecommendation(e.Status);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating GPU status display");
+            }
+        });
+    }
+
+    private async Task UpdateAccelerationAvailability()
+    {
+        // Check if current GPU status allows for acceleration recommendations
+        if (_gpuMonitoringService.CurrentStatus != null)
+        {
+            UpdateAccelerationRecommendation(_gpuMonitoringService.CurrentStatus);
+        }
+    }
+
+    private void UpdateGpuStatusDisplay(GpuStatus status)
+    {
+        // Check current acceleration setting to show appropriate information
+        var useGpu = _settingsService.Settings.UseGpu;
+        
+        // Update the status text with inline indicators after each metric
+        GpuStatusText.Text = status.GetCompactStatusWithIndicators(!useGpu);
+        
+        // Only show critical advice for serious issues
+        if (status.ShouldShowCriticalWarning())
+        {
+            var criticalAdvice = status.GetCriticalAdvice();
+            if (!string.IsNullOrEmpty(criticalAdvice))
+            {
+                GpuCriticalAdviceText.Text = criticalAdvice;
+                GpuCriticalAdviceText.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                GpuCriticalAdviceText.Visibility = Visibility.Collapsed;
+            }
+        }
+        else
+        {
+            GpuCriticalAdviceText.Visibility = Visibility.Collapsed;
+        }
+        
+        // Update tooltip with detailed information
+        var memoryType = useGpu ? "GPU Memory" : "System RAM";
+        var memoryPercent = useGpu ? status.MemoryUsagePercent : status.SystemMemoryUsagePercent;
+        
+        var detailedTooltip = $"{status.Name}\n" +
+                             $"GPU Memory: {status.GetMemoryString()}\n" +
+                             $"GPU Load: {status.GpuUtilization}%\n" +
+                             $"CPU Load: {status.CpuUtilization}%\n" +
+                             $"Temperature: {status.Temperature}°C\n" +
+                             $"Power: {status.PowerDraw}W\n";
+        
+        if (status.SystemMemoryTotalMB > 0)
+        {
+            detailedTooltip += $"System RAM: {status.GetSystemMemoryString()}\n";
+        }
+        
+        detailedTooltip += $"Graphics Clock: {status.GraphicsClock}MHz\n" +
+                          $"Memory Clock: {status.MemoryClock}MHz";
+        
+        if (status.IsThrottling)
+        {
+            detailedTooltip += "\n⚠ Performance is being limited";
+        }
+        
+        // Add warning explanations to tooltip
+        var warnings = new List<string>();
+        if (status.GetTemperatureLevel() != PerformanceLevel.Good)
+            warnings.Add($"Temperature: {status.Temperature}°C (Warning at 75°C, Critical at 85°C)");
+        if (status.GetMemoryLevel(!useGpu) != PerformanceLevel.Good)
+            warnings.Add($"{memoryType}: {memoryPercent:F0}% (Warning at 85%, Critical at 95%)");
+        if (status.IsThrottling)
+            warnings.Add("Performance throttling is active");
+        
+        if (warnings.Any())
+        {
+            detailedTooltip += "\n\nWarnings:\n• " + string.Join("\n• ", warnings);
+        }
+        
+        ToolTipService.SetToolTip(GpuStatusBorder, detailedTooltip);
+    }
+
+    private void UpdateModelRecommendations(GpuStatus status)
+    {
+        // Only update model selection if GPU is available and we have performance data
+        if (status.MemoryTotalMB > 0)
+        {
+            var recommendedModel = status.GetRecommendedModel();
+            _logger.LogDebug("GPU recommends model: {RecommendedModel} (Available memory: {AvailableMemory}MB)", 
+                recommendedModel, status.MemoryTotalMB - status.MemoryUsedMB);
+            
+            // Update model availability based on current acceleration mode
+            UpdateModelAvailabilityBasedOnMode(status);
+        }
+    }
+    
+    private void UpdateModelAvailabilityBasedOnMode(GpuStatus status)
+    {
+        var useGpu = _settingsService.Settings.UseGpu;
+        var models = ModelComboBox.ItemsSource as List<ModelInfo>;
+        if (models == null) return;
+        
+        foreach (var model in models)
+        {
+            var requiredVramMB = GetModelVramRequirement(model.Name);
+            var requiredSystemRamMB = GetModelSystemRamRequirement(model.Name);
+            
+            if (useGpu)
+            {
+                // GPU mode: Check VRAM availability
+                var hasRealGpu = status.IsRealGpu();
+                if (hasRealGpu)
+                {
+                    var canRunOnGpu = status.HasSufficientVramForModel(model.Name);
+                    if (!canRunOnGpu)
+                    {
+                        var requiredVramGB = Math.Ceiling(requiredVramMB * 1.2 / 1024.0);
+                        var availableVramGB = Math.Round(status.MemoryTotalMB / 1024.0, 1);
+                        _logger.LogDebug("Model {ModelName} requires ~{RequiredVramGB}GB VRAM, but only {AvailableVramGB}GB available",
+                            model.Name, requiredVramGB, availableVramGB);
+                    }
+                }
+            }
+            else
+            {
+                // CPU mode: Check system RAM availability
+                if (status.SystemMemoryTotalMB > 0)
+                {
+                    var availableSystemRamMB = status.SystemMemoryTotalMB - status.SystemMemoryUsedMB;
+                    var canRunOnCpu = availableSystemRamMB >= (requiredSystemRamMB * 1.2); // 20% safety margin
+                    
+                    if (!canRunOnCpu)
+                    {
+                        var requiredRamGB = Math.Ceiling(requiredSystemRamMB * 1.2 / 1024.0);
+                        var availableRamGB = Math.Round(availableSystemRamMB / 1024.0, 1);
+                        _logger.LogDebug("Model {ModelName} requires ~{RequiredRamGB}GB RAM, but only {AvailableRamGB}GB available",
+                            model.Name, requiredRamGB, availableRamGB);
+                    }
+                }
+            }
+        }
+    }
+    
+    private int GetModelSystemRamRequirement(string modelName)
+    {
+        // System RAM requirements are typically higher than VRAM requirements
+        // because system RAM is shared with other applications
+        return modelName.ToLower() switch
+        {
+            var name when name.Contains("large-v3") => 6144,    // ~6GB
+            var name when name.Contains("large-v2") => 6144,    // ~6GB
+            var name when name.Contains("large") => 6144,       // ~6GB
+            var name when name.Contains("medium") => 3072,      // ~3GB
+            var name when name.Contains("small") => 2048,       // ~2GB
+            var name when name.Contains("base") => 1536,        // ~1.5GB
+            var name when name.Contains("tiny") => 1024,        // ~1GB
+            _ => 2048 // Default to 2GB for unknown models
+        };
+    }
+
+    private void UpdateAccelerationRecommendation(GpuStatus status)
+    {
+        // Update acceleration dropdown based on GPU performance
+        var gpuItem = AccelerationComboBox.Items.Cast<ComboBoxItem>()
+            .FirstOrDefault(item => item.Content.ToString()?.StartsWith("GPU") == true);
+        
+        if (gpuItem != null)
+        {
+            if (status.IsGpuAccelerationRecommended())
+            {
+                gpuItem.Content = "GPU ✅";
+                gpuItem.IsEnabled = true;
+            }
+            else if (status.HasPerformanceIssues())
+            {
+                gpuItem.Content = "GPU ⚠";
+                gpuItem.IsEnabled = true; // Still allow, but with warning
+            }
+            else
+            {
+                gpuItem.Content = "GPU";
+                gpuItem.IsEnabled = true;
+            }
+        }
+    }
+
+    private async void GpuStatusBorder_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        try
+        {
+            if (_gpuMonitoringService.CurrentStatus == null)
+                return;
+
+            var status = _gpuMonitoringService.CurrentStatus;
+            
+            var content = new StackPanel { Spacing = 12 };
+            
+            content.Children.Add(new TextBlock
+            {
+                Text = "GPU Performance Details",
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.Bold
+            });
+            
+            content.Children.Add(new TextBlock
+            {
+                Text = $"GPU: {status.Name}",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            });
+            
+            var detailsGrid = new Grid();
+            detailsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+            detailsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            
+            var details = new[]
+            {
+                ("Memory:", status.GetMemoryString()),
+                ("GPU Load:", $"{status.GpuUtilization}%"),
+                ("CPU Load:", $"{status.CpuUtilization}%"),
+                ("Memory Load:", $"{status.MemoryUtilization}%"),
+                ("Temperature:", $"{status.Temperature}°C"),
+                ("Power Draw:", $"{status.PowerDraw}W"),
+                ("Graphics Clock:", $"{status.GraphicsClock}MHz"),
+                ("Memory Clock:", $"{status.MemoryClock}MHz"),
+                ("Throttling:", status.IsThrottling ? "YES ⚠" : "No")
+            };
+            
+            if (status.SystemMemoryTotalMB > 0)
+            {
+                // Add system RAM info
+                var systemDetails = details.ToList();
+                systemDetails.Insert(1, ("System RAM:", status.GetSystemMemoryString()));
+                details = systemDetails.ToArray();
+            }
+            
+            for (int i = 0; i < details.Length; i++)
+            {
+                detailsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                
+                var label = new TextBlock { Text = details[i].Item1, Margin = new Thickness(0, 2, 8, 2) };
+                var value = new TextBlock 
+                { 
+                    Text = details[i].Item2, 
+                    Margin = new Thickness(0, 2, 0, 2),
+                    Foreground = details[i].Item1 == "Throttling:" && status.IsThrottling ? 
+                        Application.Current.Resources["SystemFillColorCriticalBrush"] as Microsoft.UI.Xaml.Media.Brush : null
+                };
+                
+                Grid.SetRow(label, i);
+                Grid.SetColumn(label, 0);
+                Grid.SetRow(value, i);
+                Grid.SetColumn(value, 1);
+                
+                detailsGrid.Children.Add(label);
+                detailsGrid.Children.Add(value);
+            }
+            
+            content.Children.Add(detailsGrid);
+            
+            // Add model compatibility information
+            content.Children.Add(new TextBlock
+            {
+                Text = "Model Compatibility:",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 8, 0, 4)
+            });
+            
+            var useGpu = _settingsService.Settings.UseGpu;
+            var models = ModelComboBox.ItemsSource as List<ModelInfo>;
+            if (models != null)
+            {
+                var modelCompatibilityText = "";
+                var compatibleCount = 0;
+                
+                foreach (var model in models)
+                {
+                    bool canRun;
+                    if (useGpu && status.IsRealGpu())
+                    {
+                        canRun = status.HasSufficientVramForModel(model.Name);
+                    }
+                    else
+                    {
+                        // CPU mode - all models available
+                        canRun = true;
+                    }
+                    
+                    var indicator = canRun ? "✅" : "❌";
+                    modelCompatibilityText += $"{indicator} {model.Name}\n";
+                    if (canRun) compatibleCount++;
+                }
+                
+                var modeText = useGpu ? (status.IsRealGpu() ? "GPU" : "GPU (Integrated)") : "CPU";
+                content.Children.Add(new TextBlock
+                {
+                    Text = $"{modeText} Mode: {compatibleCount}/{models.Count} models compatible",
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(16, 0, 0, 4)
+                });
+                
+                content.Children.Add(new TextBlock
+                {
+                    Text = modelCompatibilityText.TrimEnd(),
+                    Margin = new Thickness(16, 0, 0, 2),
+                    FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas")
+                });
+            }
+            
+            // Add recommendations
+            content.Children.Add(new TextBlock
+            {
+                Text = "Recommendations:",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 8, 0, 4)
+            });
+            
+            content.Children.Add(new TextBlock
+            {
+                Text = $"• Recommended Model: {status.GetRecommendedModel()}",
+                Margin = new Thickness(16, 0, 0, 2)
+            });
+            
+            content.Children.Add(new TextBlock
+            {
+                Text = $"• GPU Acceleration: {(status.IsGpuAccelerationRecommended() ? "Recommended ✅" : "Use with caution ⚠")}",
+                Margin = new Thickness(16, 0, 0, 2)
+            });
+            
+            if (status.ShouldShowCriticalWarning())
+            {
+                var advice = status.GetCriticalAdvice();
+                if (!string.IsNullOrEmpty(advice))
+                {
+                    content.Children.Add(new TextBlock
+                    {
+                        Text = $"• {advice}",
+                        Margin = new Thickness(16, 0, 0, 2),
+                        Foreground = Application.Current.Resources["SystemFillColorCriticalBrush"] as Microsoft.UI.Xaml.Media.Brush
+                    });
+                }
+            }
+
+            var dialog = new ContentDialog
+            {
+                Title = "GPU Status & Model Compatibility",
+                Content = new ScrollViewer { Content = content },
+                CloseButtonText = "Close",
+                XamlRoot = XamlRoot
+            };
+
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error showing GPU status details dialog");
         }
     }
 }
